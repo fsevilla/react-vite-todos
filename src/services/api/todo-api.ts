@@ -1,38 +1,33 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-
 import { Todo } from '../../types/todo-type';
+import { CreateApiOptions, createApiService } from '../../utils/create-api';
 
-const apiUrl: string = 'https://jsonplaceholder.typicode.com'; // api base url. fetch from env variable
-const apiPath: string = 'todos';
 
-export const todoApi = createApi({
-    reducerPath: 'todoApi',
-    baseQuery: fetchBaseQuery({ 
-        baseUrl: apiUrl,
-        prepareHeaders: (headers) => {
-            headers.set('Authorization', 'token123');
-            return headers;
-        }
-    }),
-    endpoints: (builder) => ({
-      fetchTodos: builder.query<Todo[], void>({
-        query: () => apiPath, // the actual endpoint path
-      }),
-      createTodo: builder.mutation<{data: any}, Todo>({
-        query: (requestBody) => ({
-            url: apiPath,
-            method: 'POST',
-            body: requestBody
-        }),
-        async onQueryStarted(requestBody) {
-            requestBody.title = 'updated title';
-            requestBody.description = 'updated description';
-        }
-      })
-    })
-  });
+export const api = createApiService({
+  authHeather: false,
+  baseApiPath: 'todos',
+  name: 'todos',
+  endpoints: [
+    {
+      name: 'fetchData',
+      path: 'todos', // overrides the baseApi
+      method: 'GET',
+      transformResponse: (data: Todo[]) => {
+        return data.map((todo: Todo) => {
+          return todo;
+        });
+      }
+    },
+    {
+      name: 'postData',
+      path: 'todos',
+      method: 'POST',
+      prepareData: (data) => {
+        return { ...data, newData: true };
+      }
+    } 
+  ]
+} as CreateApiOptions)
+
   
-  export const { useFetchTodosQuery, useCreateTodoMutation } = todoApi;
+export const { useDefaultFetchDataQuery, useFetchDataQuery, usePostDataMutation } = api;
 
-//   /todos 
-//   /users

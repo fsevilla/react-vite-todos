@@ -1,24 +1,15 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApiService } from '../../utils/create-api';
 
-import { User } from '../../types/user-type';
+export const userApi = createApiService({
+  authHeather: false,
+  name: 'users',
+  endpoints: [
+    {
+      name: 'fetchData',
+      path: 'users', // overrides the baseApiPath
+      method: 'GET'
+    } 
+  ]
+})
 
-const apiUrl: string = 'https://jsonplaceholder.typicode.com'; // api base url. fetch from env variable
-const apiPath: string = 'users';
-
-export const userApi = createApi({
-    reducerPath: 'usersApi',
-    baseQuery: fetchBaseQuery({ 
-        baseUrl: apiUrl,
-        prepareHeaders: (headers) => {
-            headers.set('Authorization', 'token123');
-            return headers;
-        }
-    }),
-    endpoints: (builder) => ({
-      fetchUsers: builder.query<User[], void>({
-        query: () => apiPath, // the actual endpoint path
-      })
-    })
-  });
-  
-  export const { useFetchUsersQuery } = userApi;
+export const { useFetchDataQuery } = userApi;
