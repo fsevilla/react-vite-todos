@@ -1,5 +1,5 @@
 // import { useEffect } from "react";
-import { usePostDataMutation } from "../../../../services/api/todo-api";
+import { useCreateTodoMutation } from "../../../../services/api/todo-api";
 
 import { Todo } from "../../../../types/todo-type";
 
@@ -10,11 +10,7 @@ export default function TodoInputs() {
         description: 'random new task'
     }
 
-    const [createTodo, { data, isLoading, isError }] = usePostDataMutation();
-
-    // useEffect(() => {
-    //     createTodo(newTodo);
-    // }, []);
+    const [createTodo, { data, isLoading, isError }] = useCreateTodoMutation();
 
     async function handleCreateTodo() {
         console.log('Will create new task', newTodo);
@@ -32,7 +28,7 @@ export default function TodoInputs() {
             <button onClick={handleCreateTodo}>Create Todo</button>
             {isLoading && <p>Loading...</p>}
             {data && (
-                <p>CREATED A TASK!!!! {data.title}</p>
+                <p>CREATED A TASK!!!! {(data as Todo).title}</p>
             )}
             {isError && (
                 <p>Oops!!! Something failed!</p>

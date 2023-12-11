@@ -1,15 +1,18 @@
 import { Todo } from '../../types/todo-type';
-import { CreateApiOptions, createApiService } from '../../utils/create-api';
+import { HttpServiceOptions, createHttpService } from '../../utils/http-service';
 
+type TodoEndpoints = {
+  createTodo: () => Promise<Todo>
+  fetchTodos: () => Promise<Todo[]>
+}
 
-export const api = createApiService({
+export const TodoApi = createHttpService({
   authHeather: false,
   baseApiPath: 'todos',
-  name: 'todos',
   endpoints: [
     {
       name: 'fetchTodos',
-      path: 'todos', // overrides the baseApi
+      path: 'todos2', // overrides the baseApi
       method: 'GET',
       transformResponse: (data: Todo[]) => {
         return data.map((todo: Todo) => {
@@ -26,7 +29,7 @@ export const api = createApiService({
       }
     } 
   ]
-} as CreateApiOptions)
+} as HttpServiceOptions)
 
-  
-export const { useFetchTodosQuery, useCreateTodoMutation } = api;
+
+export const { fetchTodos } = (TodoApi as TodoEndpoints)

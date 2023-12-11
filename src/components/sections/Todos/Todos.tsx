@@ -1,57 +1,60 @@
 import { useEffect, useState } from "react";
 
-// import { useFetchDataQuery as useFetchUsersQuery } from "../../../services/api/user-api";
-import { useFetchDataQuery } from "../../../services/api/todo-api";
+import { useFetchTodosQuery } from "../../../services/api/todo-api";
+import { useFetchUsersQuery } from "../../../services/api/user-api";
+import { TodoApi, fetchTodos } from "../../../services/api/new-todo-api";
+import { TodosContext } from "../../../store/todos-context";
 import { Todo } from "../../../types/todo-type";
+import { User } from "../../../types/user-type";
 
-// import TodoDetails from "./TodoDetails/TodoDetails";
-// import TodoInputs from "./TodoInputs/TodoInputs";
+import TodoDetails from "./TodoDetails/TodoDetails";
+import TodoInputs from "./TodoInputs/TodoInputs";
 import TodosList from "./TodosList/TodosList";
-
-// import { TodosContext } from "../../../store/todos-context";
-// import { Todo } from "../../../types/todo-type";
-// import { User } from "../../../types/user-type";
 
 // import todos from './todos.json';
 
 export default function Todos() {
 
     const [selectedTodo, setSelectedTodo] = useState({title: ''});
+    const [fullDataTodos, setFullDataTodos] = useState<Todo[]>([]);
+    const [skipFetch, setSkipFetch] = useState(false);
 
-    // const [fullDataTodos, setFullDataTodos] = useState<Todo[]>([]);
+    const { data: todos, isFetching: isFetchingTodos, error: getTodosError, refetch: refetchTodos } = useFetchTodosQuery({}, {skip: skipFetch});
+    const { data: users, isFetching: isFetchingUsers, error: getUsersError, refetch: refetchUsers } = useFetchUsersQuery({}, {skip: skipFetch});
 
-    // const { data: todos, error: getTodosError, isLoading: isTodosLoading, isFetching: isTodosFetching, refetch: refetchTodos } = useFetchTodosQuery();
-    // const { data: users, error: getUsersError, isLoading: isUsersLoading, isFetching: isUsersFetching, refetch: refetchUsers } = useFetchUsersQuery();
-    const { data, isLoading, isFetching, isError, error, refetch } = useFetchDataQuery({});
     useEffect(() => {
-        console.log('useFetch', useFetchDataQuery);
+        fetchTodos().then(response => {
+            console.log('Got these todos!', response);
+        }).catch(err => {
+            console.error('Failed to get todos', err);
+        })
     }, []);
 
-    if(isFetching) {
-        return <p>Still fetching</p>
-    }
+    useEffect(() => {
+        if(users && todos) {
+            const usersMap: any = {};
+            (users as User[]).map((user) => {
+                usersMap[user.id!] = user;
+            });
 
-    // useEffect(() => {
-    //     if(users && todos) {
-    //         const usersMap: any = {};
-    //         users.map((user: User) => {
-    //             usersMap[user.id!] = user;
-    //         });
+            setFullDataTodos(() => {
+                return (todos as Todo[]).map((todo) => {
+                    return {
+                        ...todo, 
+                        user: usersMap[todo.userId!]
+                    }
+                });
+            });
+        }
+    }, [users, todos]);
 
-    //         setFullDataTodos(() => {
-    //             return todos.map((todo: Todo) => {
-    //                 return {
-    //                     ...todo, 
-    //                     user: usersMap[todo.userId!]
-    //                 }
-    //             });
-    //         });
-    //     }
-    // }, [todos, users]);
 
     function getTodos() {
-        refetch();
-        // refetchUsers();
+        setSkipFetch(() => false);
+        try {
+            refetchTodos();
+            refetchUsers();
+        } catch(e) {}
     }
 
     function handleSelectTodo(item: Todo) {
@@ -70,35 +73,17 @@ export default function Todos() {
 
     return (
         <>
-            {/* {(getTodosError || getUsersError) && <p>Oops! Something failed. Try again!</p>} */}
-            {/* {todos && (
+            {(getTodosError || getUsersError) && <p>Oops! Something failed. Try again!</p>}
+            {(isFetchingTodos || isFetchingUsers) && <p>loading...</p>}
+            {fullDataTodos && (
                 <>
                     <TodosContext.Provider value={todosContextValue}>
                         <TodoInputs />
                         <hr />
                         <button onClick={getTodos}>Reload</button>
                         <TodoDetails />
-                        <TodosList todos={todos} />
+                        <TodosList todos={fullDataTodos as Todo[]} />
                     </TodosContext.Provider>
-                </>
-            )} */}
-            <h2>Todos</h2>
-            <button onClick={getTodos}>Reload</button>
-            {isLoading && <p>loading...</p>}
-            {isError && <p>error occurred...</p>}
-            {error && <p>something failed</p>}
-            {data && (
-                <>
-                    <p>Loaded!!!</p>
-                    <ul>
-                        {
-                            (data as Todo[]).map((todo: Todo) => {
-                                return (
-                                    <li key={todo.id}>{todo.title}</li>
-                                )
-                            })
-                        }
-                    </ul>
                 </>
             )}
         </>

@@ -1,15 +1,24 @@
-import { createApiService } from '../../utils/create-api';
+import { CreateApiOptions, createApiService } from '../../utils/create-api';
+import { User } from '../../types/user-type';
 
-export const userApi = createApiService({
+export const api = createApiService({
   authHeather: false,
-  name: 'users',
+  baseApiPath: 'users',
   endpoints: [
     {
-      name: 'fetchData',
-      path: 'users', // overrides the baseApiPath
-      method: 'GET'
-    } 
+      name: 'fetchUsers',
+      method: 'GET',
+      transformResponse: (data: User[]) => {
+        return [...data];
+      },
+      prepareData: (data) => {
+        return {...data}
+      },
+      onSuccess: (response) => {}
+    }
   ]
-})
+} as CreateApiOptions)
 
-export const { useFetchDataQuery } = userApi;
+
+  
+export const { useFetchUsersQuery } = api;

@@ -1,10 +1,10 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { api as todoApi } from './../services/api/todo-api';
-// import { userApi } from './../services/api/user-api';
+import { api as userApi } from './../services/api/user-api';
 
 const rootReducer = {
     [todoApi.reducerPath]: todoApi.reducer,
-    // [userApi.reducerPath]: userApi.reducer,
+    [userApi.reducerPath]: userApi.reducer,
 };
   
 export const store = configureStore({
@@ -12,7 +12,7 @@ export const store = configureStore({
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(
             todoApi.middleware,
-            // userApi.middleware
+            userApi.middleware
         )
 });
 
