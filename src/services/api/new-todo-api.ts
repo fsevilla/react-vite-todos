@@ -1,18 +1,12 @@
 import { Todo } from '../../types/todo-type';
-import { HttpServiceOptions, createHttpService } from '../../utils/http-service';
+import { createApiService, CreateApiOptions } from '../../utils/create-api';
 
-type TodoEndpoints = {
-  createTodo: () => Promise<Todo>
-  fetchTodos: () => Promise<Todo[]>
-}
-
-export const TodoApi = createHttpService({
+export const TodoApi = createApiService({
   authHeather: false,
   baseApiPath: 'todos',
   endpoints: [
     {
-      name: 'fetchTodos',
-      path: 'todos2', // overrides the baseApi
+      name: 'fetchItems',
       method: 'GET',
       transformResponse: (data: Todo[]) => {
         return data.map((todo: Todo) => {
@@ -22,14 +16,67 @@ export const TodoApi = createHttpService({
     },
     {
       name: 'createTodo',
-      path: 'todos',
       method: 'POST',
-      prepareData: (data) => {
+      prepareData: (data: any) => {
         return { ...data, newData: true };
       }
     } 
   ]
-} as HttpServiceOptions)
+} as CreateApiOptions)
 
 
-export const { fetchTodos } = (TodoApi as TodoEndpoints)
+export const { fetchItems, createTodo } = TodoApi;
+
+
+
+
+// import { useState, useEffect} from 'react';
+// import { httpService } from "../../utils/http-service";
+
+// import { Todo } from "../../types/todo-type";
+
+// class TodoService {
+//   fetchTodos() {
+//     const {data, setData} = useFetchTodos();
+//     const [isLoading, setIsLoading] = useState(false);
+//     const [isReady, setIsReady] = useState(false);
+
+
+//     const promise = new Promise((resolve, reject) => {
+//       if(!isLoading && !isReady) {
+//         setIsLoading(true);
+//         httpService.get('todos').then((response: any) => {
+//           setIsLoading(false);
+//           setIsReady(true);
+//           setData(response);
+//           resolve(response);
+//         }).catch(err => {
+//           setIsLoading(false);
+//           setIsReady(true);
+//           reject(err);
+//         })
+//       }
+//     });
+
+//     return { data, promise, isLoading };
+//   }
+// }
+
+// export const { fetchTodos } = new TodoService();
+
+// function useFetchTodos() {
+//   const [data, setData] = useState<undefined|Todo[]>();
+
+//   useEffect(() => {}, [data]);
+
+//   const updateValue = (newValue: any) => {
+//     if(data !== newValue) {
+//       setData(newValue);  
+//     }
+//   };
+
+//   return {
+//     data,
+//     setData: updateValue,
+//   };
+// }

@@ -1,5 +1,5 @@
 // import { useEffect } from "react";
-import { useCreateTodoMutation } from "../../../../services/api/todo-api";
+import { createTodo } from "../../../../services/api/new-todo-api";
 
 import { Todo } from "../../../../types/todo-type";
 
@@ -10,12 +10,13 @@ export default function TodoInputs() {
         description: 'random new task'
     }
 
-    const [createTodo, { data, isLoading, isError }] = useCreateTodoMutation();
+    // const { data, isLoading, error, promise: sendCreateTodo } = createTodo();
+    const { data, isLoading, error, resubmit } = createTodo();
 
     async function handleCreateTodo() {
-        console.log('Will create new task', newTodo);
+        // console.log('Will create new task', newTodo);
         try {
-            await createTodo(newTodo);
+            await resubmit!({title: 'just checking', description: 'what about now?'});
         } catch(err) {
             console.error('An error occurred, here it is: ', err);
         }
@@ -30,7 +31,7 @@ export default function TodoInputs() {
             {data && (
                 <p>CREATED A TASK!!!! {(data as Todo).title}</p>
             )}
-            {isError && (
+            {error && (
                 <p>Oops!!! Something failed!</p>
             )}
         </>

@@ -1,18 +1,7 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { instanceToPlain, plainToInstance } from 'class-transformer';
+import { instanceToPlain } from 'class-transformer';
 
-const apiUrl: string = 'https://jsonplaceholder.typicode.com/'; // api base url. fetch from env variable
-
-export interface HttpServiceOptions {
-    authHeather?: boolean;
-    baseUrl?: string;
-    baseApiPath?: string;
-    endpoints?: HttpRequestOptions[];
-    prepareData?: (requestBody: any) => {};
-    skipDefaultEndpoints?: boolean;
-    transformResponse?: (response: any) => {};
-    transformErrorResponse?: (response: any) => {};
-}
+const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
 
 export interface HttpRequestOptions {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -29,22 +18,11 @@ export interface HttpRequestOptions {
 }
 
 export type HttpHeaders = {
-    [key: string]: string;
-}
-
-export type HttpRequest = {
-    [key: string]: () => Promise<any>;
+    [key: string]: string
 }
 
 export type RequestData = {
-    [key: string|number]: any;
-}
-
-const defaultApiOptions: HttpServiceOptions = {
-    authHeather: true,
-    baseApiPath: '',
-    baseUrl: apiUrl,
-    skipDefaultEndpoints: false
+    [key: string|number]: any
 }
 
 const defaultHttpRequestOptions: HttpRequestOptions = {
@@ -52,7 +30,7 @@ const defaultHttpRequestOptions: HttpRequestOptions = {
     path: ''
 }
 
-class HttpService {
+export class HttpService {
     baseUrl: string = '';
     basePath: string = '';
 
@@ -146,61 +124,3 @@ class HttpService {
 }
 
 export const httpService = new HttpService();
-
-function createApiServiceEndpoint (http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string) {
-    const options: HttpRequestOptions = {
-        baseUrl: baseApiPath,
-        ...endpointConfig
-    }
-    return () => http.request(options);
-}
-
-function createApiServiceEndpointsMap (http: HttpService, endpoints: HttpRequestOptions[], baseApiPath: string) {
-    const endpointsMap: HttpRequest = {};
-    endpoints.map((endpoint: HttpRequestOptions) => {
-        if(endpoint.name) {
-            endpointsMap[endpoint.name] = createApiServiceEndpoint(http, endpoint, baseApiPath);
-        } else {
-            throw Error('Endpoint name missing');
-        }
-    });
-    return endpointsMap;
-}
-
-export function createHttpService(apiOptions: HttpServiceOptions = {}) {
-    apiOptions = {
-        ...defaultApiOptions,
-        ...apiOptions
-    };
-    const http: HttpService = new HttpService(apiOptions.baseApiPath, apiOptions.baseUrl);
-
-    const baseApiPath = http.baseUrl;
-
-    const predefinedEndpoints  = !!apiOptions.skipDefaultEndpoints ? {} : {
-        fetchData: (options?:HttpRequestOptions) => {
-            const url: string = apiOptions.baseApiPath || '';
-            return http.get(url, options);
-        },
-        getOne: (id: string|number) => {
-            const url: string = apiOptions.baseApiPath + `/${id}`;
-            return http.get(url);
-        },
-        createOne: (data: RequestData, options?:HttpRequestOptions) => {
-            const url: string = apiOptions.baseApiPath || '';
-            return http.post(url, data, options);
-        },
-        updateOne: (id: string|number, data: RequestData, options?:HttpRequestOptions) => {
-            const url: string = apiOptions.baseApiPath + `/${id}`;
-            return http.put(url, data, options);
-        }        
-    };
-
-    const customEndpoints = apiOptions.endpoints ? createApiServiceEndpointsMap(http, apiOptions.endpoints, baseApiPath) : {};
-
-    const endpoints = {
-        ...predefinedEndpoints,
-        ...customEndpoints
-    }
-
-   return endpoints;
-}

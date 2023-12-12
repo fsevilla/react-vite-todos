@@ -1,11 +1,14 @@
 // import { Todo } from '../../types/todo-type';
-// import { CreateApiOptions, createApiService } from '../../utils/create-api';
+// import { HttpServiceOptions, createHttpService } from '../../utils/http-service';
 
+// type TodoEndpoints = {
+//   createTodo: () => Promise<Todo>
+//   fetchTodos: () => any
+// }
 
-// export const api = createApiService({
+// export const TodoApi = createHttpService({
 //   authHeather: false,
 //   baseApiPath: 'todos',
-//   name: 'todos',
 //   endpoints: [
 //     {
 //       name: 'fetchTodos',
@@ -26,7 +29,7 @@
 //       }
 //     } 
 //   ]
-// } as CreateApiOptions)
+// } as HttpServiceOptions)
 
-  
-// export const { useFetchTodosQuery, useCreateTodoMutation } = api;
+
+// export const { fetchTodos } = (TodoApi as TodoEndpoints)

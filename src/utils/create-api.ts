@@ -1,116 +1,225 @@
-// import { instanceToPlain, plainToInstance } from 'class-transformer';
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { useState, useEffect } from 'react';
+import { HttpService, HttpRequestOptions, RequestData } from "./http-service";
 
-const apiUrl: string = 'https://jsonplaceholder.typicode.com'; // api base url. fetch from env variable
-
-export interface ApiEndpoint {
-    name: string,
-    method: string,
-    path?: string, // overrides baseApiPath
-    prepareData?: (requestBody: any) => {};
-    transformResponse?: (response: any) => {};
-    transformErrorResponse?: (response: any) => {};
-    onSuccess?: (response: any) => void;
-}
+const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
 
 export interface CreateApiOptions {
     authHeather?: boolean;
-    name?: string;
     baseUrl?: string;
     baseApiPath?: string;
+    endpoints?: HttpRequestOptions[];
     prepareData?: (requestBody: any) => {};
+    skipDefaultEndpoints?: boolean;
     transformResponse?: (response: any) => {};
     transformErrorResponse?: (response: any) => {};
-    endpoints?: ApiEndpoint[]
+}
+
+export interface ApiServiceEndpointResponse {
+    data: any;
+    promise: Promise<unknown>|undefined;
+    refetch?: () => Promise<unknown>;
+    resubmit?: (data?: RequestData) => Promise<unknown>;
+    isLoading: boolean;
+    error: any;
+}
+
+export type ApiServiceEndpoints = {
+    [key: string]: (data?: RequestData|UseApiConfig, config?: UseApiConfig) => ApiServiceEndpointResponse;
+}
+
+export type UseApiConfig = {
+    skipInitialRequest?: boolean;
+}
+
+const defaultFetchApiConfig: UseApiConfig = {
+    skipInitialRequest: false
+}
+
+const defaultPostApiConfig: UseApiConfig = {
+    skipInitialRequest: true
 }
 
 const defaultApiOptions: CreateApiOptions = {
-    name: '',
-    baseUrl: apiUrl,
+    authHeather: true,
     baseApiPath: '',
-    authHeather: true
+    baseUrl: apiUrl,
+    skipDefaultEndpoints: false
 }
 
-function createApiServiceEndpoint (builder: any, endpointConfig: ApiEndpoint, baseApiPath: string) {
-
-    const transformResponse = (response: any) => {
-        let res = response;
-
-        if(typeof endpointConfig.transformResponse === 'function') {
-            res = endpointConfig.transformResponse(response);
+function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): (config?: UseApiConfig) => ApiServiceEndpointResponse {
+    return (config?: UseApiConfig) => {
+        const options: HttpRequestOptions = {
+            baseUrl: baseApiPath,
+            ...endpointConfig
         }
 
-        if(typeof endpointConfig.onSuccess === 'function') {
-            endpointConfig.onSuccess(res);
-        }
-        
-        return res;
-    }
-
-    if(endpointConfig.method === 'GET') {
-        return builder.query({
-            query: () => endpointConfig.path || baseApiPath,
-            transformResponse
-        });
-    } else {
-        return builder.mutation({
-            query: (requestBody?: any) => ({
-                url: endpointConfig.path || baseApiPath,
-                method: endpointConfig.method,
-                body: requestBody
-            }),
-            async onQueryStarted(requestBody: any) {
-                if(typeof endpointConfig.prepareData === 'function') {
-                    Object.assign(requestBody, endpointConfig.prepareData(requestBody));
+        config = {
+            ...defaultFetchApiConfig,
+            ...config
+        };
+    
+        const {data, setData} = useFetchData();
+        const {data: error, setData: setError} = useFetchData();
+        const [isLoading, setIsLoading] = useState(false);
+        const [isReady, setIsReady] = useState(false);
+    
+        let promise;
+        const request = (force?: boolean) => {
+            return new Promise((resolve, reject) => {
+                if((!isLoading && !isReady) || !!force) {
+                  setIsLoading(true);
+                  http.request(options).then(response => {
+                    setIsLoading(false);
+                    setIsReady(true);
+                    setData(response);
+                    resolve(response);
+                  }).catch(err => {
+                    setIsLoading(false);
+                    setIsReady(true);
+                    setError(err);
+                    reject(err);
+                  })
                 }
-            },
-            transformResponse
-        });
+            });
+        }
+
+        const refetch = () => {
+            return request(true);
+        }
+
+        if(config && !config.skipInitialRequest) {
+            promise = request();
+        }
+
+        return { data, isLoading, error, promise, refetch };
     }
 }
 
-function createApiServiceEndpointsMap (builder: any, endpoints: ApiEndpoint[], baseApiPath: string) {
-    const endpointsMap: any = {};
-    endpoints.map((endpoint: ApiEndpoint) => {
-        endpointsMap[endpoint.name] = createApiServiceEndpoint(builder, endpoint, baseApiPath);
+function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): (data?: RequestData, config?: UseApiConfig) => ApiServiceEndpointResponse {
+    return (body?: RequestData, config?: UseApiConfig) => {
+        body = body || {};
+
+        const options: HttpRequestOptions = {
+            baseUrl: baseApiPath,
+            ...endpointConfig
+        }
+
+
+        config = {
+            ...defaultPostApiConfig,
+            ...config
+        };
+    
+        const {data, setData} = useFetchData();
+        const {data: error, setData: setError} = useFetchData();
+        const [isLoading, setIsLoading] = useState(false);
+        const [isReady, setIsReady] = useState(false);
+    
+        let promise;
+        const request = (requestBody: RequestData, force?: boolean) => {
+            options.data = requestBody;
+            return new Promise((resolve, reject) => {
+                if((!isLoading && !isReady) || !!force) {
+                  setIsLoading(true);
+                  http.request(options).then(response => {
+                    setIsLoading(false);
+                    setIsReady(true);
+                    setData(response);
+                    resolve(response);
+                  }).catch(err => {
+                    setIsLoading(false);
+                    setIsReady(true);
+                    setError(err);
+                    reject(err);
+                  })
+                }
+            });
+        }
+
+        const resubmit = (data?: RequestData) => {
+            data = data || {};
+            return request(data, true);
+        }
+
+        if(config && !config.skipInitialRequest) {
+            promise = request(body);
+        }
+
+        return { data, isLoading, error, promise, resubmit };
+    }
+}
+
+function createApiServiceEndpoint (http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): (params?: RequestData|UseApiConfig, config?: UseApiConfig) => ApiServiceEndpointResponse {
+    if(endpointConfig.method === 'GET') {
+        return createApiFetchEndpoint(http, endpointConfig, baseApiPath);
+    } else {
+        return createApiPostEndpoint(http, endpointConfig, baseApiPath);
+    }
+}
+
+function createApiServiceEndpointsMap (http: HttpService, endpoints: HttpRequestOptions[], baseApiPath: string) {
+    const endpointsMap: ApiServiceEndpoints = {};
+    endpoints.map((endpoint: HttpRequestOptions) => {
+        if(endpoint.name) {
+            endpointsMap[endpoint.name] = createApiServiceEndpoint(http, endpoint, baseApiPath);
+        } else {
+            throw Error('Endpoint name missing');
+        }
     });
     return endpointsMap;
 }
 
-export function createApiService(options: CreateApiOptions = {}) {
-    options = {
+export function createApiService(apiOptions: CreateApiOptions = {}) {
+    apiOptions = {
         ...defaultApiOptions,
-        ...options
+        ...apiOptions
     };
+    const http: HttpService = new HttpService(apiOptions.baseApiPath, apiOptions.baseUrl);
 
-    const baseApiPath = options.baseApiPath || options.name || '';
-    const name = options.name || baseApiPath;
-    const apiName = name.charAt(0).toUpperCase() + name.toLowerCase().slice(1);
+    const baseApiPath = http.baseUrl;
 
-    return createApi({
-        reducerPath: apiName + 'Api',
-        baseQuery: fetchBaseQuery({ 
-            baseUrl: apiUrl,
-            prepareHeaders: (headers) => {
-                if(options?.authHeather) {
-                    headers.set('Authorization', 'token123');
-                }
-                return headers;
-            }
-        }),
-        endpoints: (builder) => {
-            const predefinedEndpoints = {
-                defaultFetchData: builder.query<string, void>({
-                  query: () => 'todos',
-                }),
-            };
+    // const predefinedEndpoints  = !!apiOptions.skipDefaultEndpoints ? {} : {
+    //     fetchData: (options?:HttpRequestOptions) => {
+    //         const url: string = apiOptions.baseApiPath || '';
+    //         return http.get(url, options);
+    //     },
+    //     getOne: (id: string|number) => {
+    //         const url: string = apiOptions.baseApiPath + `/${id}`;
+    //         return http.get(url);
+    //     },
+    //     createOne: (data: RequestData, options?:HttpRequestOptions) => {
+    //         const url: string = apiOptions.baseApiPath || '';
+    //         return http.post(url, data, options);
+    //     },
+    //     updateOne: (id: string|number, data: RequestData, options?:HttpRequestOptions) => {
+    //         const url: string = apiOptions.baseApiPath + `/${id}`;
+    //         return http.put(url, data, options);
+    //     }        
+    // };
 
-           const customEndpoints = options.endpoints ? createApiServiceEndpointsMap(builder, options.endpoints, baseApiPath) : {};
+    const customEndpoints = apiOptions.endpoints ? createApiServiceEndpointsMap(http, apiOptions.endpoints, baseApiPath) : {};
 
-            return {
-                ...predefinedEndpoints,
-                ...customEndpoints
-            }
-        }
-    });
+    const endpoints: ApiServiceEndpoints = {
+        // ...predefinedEndpoints,
+        ...customEndpoints
+    }
+
+   return endpoints;
 }
+
+function useFetchData() {
+    const [data, setData] = useState<any>(undefined);
+  
+    useEffect(() => {}, [data]);
+  
+    const updateValue = (newValue: any) => {
+      if(data !== newValue) {
+        setData(newValue);  
+      }
+    };
+  
+    return {
+      data,
+      setData: updateValue,
+    };
+  }
