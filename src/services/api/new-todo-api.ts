@@ -6,7 +6,7 @@ export const TodoApi = createApiService({
   baseApiPath: 'todos',
   endpoints: [
     {
-      name: 'fetchItems',
+      name: 'fetchTodos',
       method: 'GET',
       transformResponse: (data: Todo[]) => {
         return data.map((todo: Todo) => {
@@ -25,7 +25,7 @@ export const TodoApi = createApiService({
 } as CreateApiOptions)
 
 
-export const { fetchItems, createTodo } = TodoApi;
+export const { fetchTodos, createTodo } = TodoApi;
 
 
 

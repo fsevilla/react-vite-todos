@@ -10,13 +10,13 @@ export default function TodoInputs() {
         description: 'random new task'
     }
 
-    // const { data, isLoading, error, promise: sendCreateTodo } = createTodo();
-    const { data, isLoading, error, resubmit } = createTodo();
+    // const { data, isFetching, error, promise: sendCreateTodo } = createTodo();
+    const [ sendCreateTodo, {data, error, isFetching} ] = createTodo();
 
     async function handleCreateTodo() {
         // console.log('Will create new task', newTodo);
         try {
-            await resubmit!({title: 'just checking', description: 'what about now?'});
+            await sendCreateTodo({title: 'just checking', description: 'what about now?'});
         } catch(err) {
             console.error('An error occurred, here it is: ', err);
         }
@@ -27,7 +27,7 @@ export default function TodoInputs() {
     return (
         <>
             <button onClick={handleCreateTodo}>Create Todo</button>
-            {isLoading && <p>Loading...</p>}
+            {isFetching && <p>Loading...</p>}
             {data && (
                 <p>CREATED A TASK!!!! {(data as Todo).title}</p>
             )}

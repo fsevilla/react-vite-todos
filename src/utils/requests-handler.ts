@@ -1,22 +1,58 @@
+/**
+ * Document how to use directly passing promises
+ * How to use with apiService passing returned promises
+ * How to handle then and catch
+ * and pass status (setStatus) as donde by apiService
+ */
+
 const environment = {
     IS_PROD: false
 }
 
 type HandlerConfig = {
-    asynchronous?: boolean;
     allowDuplicateGroups?: boolean;
+    asynchronous?: boolean;
 }
 
-type RequestFn = () => Promise<unknown>;
+type HandlerGroups = {
+    [key: string]: HandlerRequestsResponse
+}
 
-type RequestsGroup = {
-    required: RequestFn[],
-    optional: RequestFn[]
+type HandlerRequestFn = (data?: any) => Promise<unknown>;
+
+type HandlerRequest = Promise<unknown> | HandlerRequestFn;
+
+type HandlerRequests = Array<HandlerRequest>;
+
+type HandlerRequestTypes = {
+    required: HandlerRequests,
+    optional?: HandlerRequests
+}
+
+type HandlerRequestsConfig = {
+    asynchronous?: boolean; // overrides HandlerConfig's async setting
+}
+
+type HandlerRequestsResponse = {
+    isComplete: boolean;
+    totalRequests: number;
+    totalComplete: number;
+    totalSuccessCount: number;
+    totalErrorsCount: number;
+    totalRequiredSuccessCount: number;
+    totalRequiredErrorsCount: number;
+    totalOptionalSuccessCount: number;
+    totalOptionalErrorsCount: number;
+    results: any[]
 }
 
 const defaultHandlerConfig: HandlerConfig =  {
     asynchronous: true,
     allowDuplicateGroups: false
+}
+
+const defaultHandlerRequestsConfig: HandlerRequestsConfig =  {
+    asynchronous: true
 }
 
 class RequestsHandlerError extends Error {
@@ -27,69 +63,156 @@ class RequestsHandlerError extends Error {
     }
 }
 
-class RequestsHandlerDuplicateGroupError extends Error {
+class RequestsHandlerDuplicateGroupError extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
-      this.name = "RequestsHandlerError";
+      this.name = "RequestsHandlerDuplicateGroupError";
       Object.setPrototypeOf(this, RequestsHandlerDuplicateGroupError.prototype);
     }
 }
 
+class OptionalRequestFailure extends RequestsHandlerError {
+    constructor(message: string) {
+      super(message);
+      this.name = "OptionalRequestFailure";
+      Object.setPrototypeOf(this, OptionalRequestFailure.prototype);
+    }
+}
 
-class RequestsHandler {
-    groups: any = {};
+class UnknownRequestsHandlerError extends RequestsHandlerError {
+    constructor(message: string) {
+      super(message);
+      this.name = "UnknownRequestsHandlerError";
+      Object.setPrototypeOf(this, UnknownRequestsHandlerError.prototype);
+    }
+}
+
+class RequiredRequestFailure extends RequestsHandlerError {
+    constructor(message: string) {
+      super(message);
+      this.name = "RequiredRequestFailure";
+      Object.setPrototypeOf(this, RequiredRequestFailure.prototype);
+    }
+}
+
+export class RequestsHandler {
+    groups: HandlerGroups = {};
     events: string[] = [];
     scope: string[] = [];
     modulesCount: number = 0;
     loadedModulesCount: number = 0;
+    groupsCount: number = 0;
 
-    // constructor(requests: RequestFn[] | RequestsGroup, config: HandlerConfig) {
+    settings: HandlerConfig = {};
 
-    // }
+    constructor(config?: HandlerConfig) {
+        config = config || {};
+        this.settings = {
+            ...defaultHandlerConfig,
+            ...config
+        };
+    }
+
     log(message:any) {
         if(!!environment.IS_PROD) return;
         const now = new Date().toDateString();
         console.log(`[RequestHandler] (${now})`, message);
     }
 
-    handle(groupName: string, requests: RequestFn[] | RequestsGroup, config: HandlerConfig) {
+    requests(groupName: string|null, requests: HandlerRequests | HandlerRequestTypes, config?: HandlerRequestsConfig) {
         return new Promise((resolve, reject) => {
             try {
                 config = config || {};
-                const settings: HandlerConfig = {
-                    ...defaultHandlerConfig,
+                config = {
+                    ...defaultHandlerRequestsConfig,
                     ...config
                 }
-                if(this.groups[groupName] && !settings.allowDuplicateGroups) throw new RequestsHandlerDuplicateGroupError(`Group '${groupName} already exists'`)
+                const asyncRequests = config.asynchronous || this.settings.asynchronous;
                 
-                const promises: RequestFn[] = [];
-                if('map' in requests) {
-                    this.groups[groupName] = {
-                        totalRequests: requests.length,
-                        totalSuccessCount: 0,
-                        totalErrorsCount: 0,
-                        totalRequiredSuccessCount: 0,
-                        totalRequiredErrorsCount: 0,
-                        totalOptionalSuccessCount: 0,
-                        totalOptionalErrorsCount: 0,
-                        results: []
-                    };
-                    requests.map((promise, index: number) => {
-                        const promiseData = {
+                if(groupName && this.groups[groupName] && !this.settings.allowDuplicateGroups) {
+                    throw new RequestsHandlerDuplicateGroupError(`Group '${groupName} already exists'`);
+                }
 
+                const requestsGroupedByType = 'map' in requests ? { required: requests } : requests;
+
+                if(!requestsGroupedByType.optional) {
+                    requestsGroupedByType.optional = [];
+                }
+
+                const allRequestsCount = requestsGroupedByType.required.length + requestsGroupedByType.optional.length;
+
+                const groupResponse: HandlerRequestsResponse = {
+                    isComplete: false,
+                    totalRequests: allRequestsCount,
+                    totalComplete: 0,
+                    totalSuccessCount: 0,
+                    totalErrorsCount: 0,
+                    totalRequiredSuccessCount: 0,
+                    totalRequiredErrorsCount: 0,
+                    totalOptionalSuccessCount: 0,
+                    totalOptionalErrorsCount: 0,
+                    results: []
+                };
+
+                // const promises: Promise<unknown>[] = [];
+                
+                requestsGroupedByType.required.map((request, index) => {
+                    let promise = request;
+                    if(typeof request === 'function') {
+                        promise = request();
+                    }
+
+                    groupResponse.results.push(null);
+                    (promise as Promise<unknown>).then((response: any) => {
+                        groupResponse.results[index] = response;
+                        groupResponse.totalSuccessCount++;
+                        groupResponse.totalRequiredSuccessCount++;
+                    }).catch(error => {
+                        groupResponse.results[index] = error;
+                        groupResponse.totalErrorsCount++;
+                        groupResponse.totalRequiredErrorsCount++;
+                    }).finally(() => {
+                        groupResponse.totalComplete++;
+                        if(groupResponse.totalComplete === groupResponse.totalRequests) {
+                            if(groupResponse.totalRequiredErrorsCount) {
+                                reject({
+                                    results: groupResponse,
+                                    error: new RequiredRequestFailure('One or many required requests failed')
+                                });
+                            } else if(groupResponse.totalOptionalErrorsCount) {
+                                reject({
+                                    results: groupResponse,
+                                    error: new OptionalRequestFailure('One or many optional requests failed')
+                                });
+                            } else if (groupResponse.totalRequests === groupResponse.totalSuccessCount) {
+                                resolve(groupResponse.results);
+                            } else {
+                                reject({
+                                    results: groupResponse,
+                                    error: new UnknownRequestsHandlerError('An unknown requests handler error occurred')
+                                });
+                            }
                         }
-                        promises.push();
-                        const newPromise = new Promise((resolve, reject) => {
-                            // when it completes, update group info (error, success count)
-                        });
-                    })
-                }            
-    
+                    });
+                });
+                
             } catch(e) {
                 this.log(e);
                 reject(e);
             }
         })
+    }
+
+    parallel(requests: HandlerRequests | HandlerRequestTypes) {
+        // const timestamp = new Date().getTime();
+        // const groupName: string = `module${this.groupsCount + 1}-${timestamp}`;
+        return this.requests(null, requests, { asynchronous: true });
+    }
+
+    series(requests: HandlerRequests | HandlerRequestTypes) {
+        // const timestamp = new Date().getTime();
+        // const groupName: string = `module${this.groupsCount + 1}-${timestamp}`;
+        return this.requests(null, requests, { asynchronous: false });
     }
 }
 

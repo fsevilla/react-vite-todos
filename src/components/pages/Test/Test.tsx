@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { fetchItems } from "../../../services/api/new-todo-api";
+import { fetchTodos } from "../../../services/api/new-todo-api";
 import { Todo } from "../../../types/todo-type";
 
 export default function Test() {
 
-    const { data, isLoading, error, promise } = fetchItems(); 
+    const [refetch, { data, isLoading, error, promise }] = fetchTodos(); 
 
     useEffect(() => {
         promise.then((response: any) => {

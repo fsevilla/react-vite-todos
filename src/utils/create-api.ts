@@ -4,7 +4,7 @@ import { HttpService, HttpRequestOptions, RequestData } from "./http-service";
 const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
 
 export interface CreateApiOptions {
-    authHeather?: boolean;
+    requiresAuth?: boolean;
     baseUrl?: string;
     baseApiPath?: string;
     endpoints?: HttpRequestOptions[];
@@ -14,12 +14,13 @@ export interface CreateApiOptions {
     transformErrorResponse?: (response: any) => {};
 }
 
-export interface ApiServiceEndpointResponse {
+export type ApiServiceEndpointResponse = [(data?: RequestData) => Promise<unknown>, ApiServiceResults];
+
+export interface ApiServiceResults {
     data: any;
-    promise: Promise<unknown>|undefined;
-    refetch?: () => Promise<unknown>;
-    resubmit?: (data?: RequestData) => Promise<unknown>;
+    promise: Promise<unknown>;
     isLoading: boolean;
+    isFetching: boolean;
     error: any;
 }
 
@@ -40,7 +41,7 @@ const defaultPostApiConfig: UseApiConfig = {
 }
 
 const defaultApiOptions: CreateApiOptions = {
-    authHeather: true,
+    requiresAuth: true,
     baseApiPath: '',
     baseUrl: apiUrl,
     skipDefaultEndpoints: false
@@ -60,21 +61,24 @@ function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOp
     
         const {data, setData} = useFetchData();
         const {data: error, setData: setError} = useFetchData();
-        const [isLoading, setIsLoading] = useState(false);
+        const [isLoading, setIsLoading] = useState(true);
+        const [isFetching, setIsFetching] = useState(false);
         const [isReady, setIsReady] = useState(false);
     
-        let promise;
         const request = (force?: boolean) => {
             return new Promise((resolve, reject) => {
-                if((!isLoading && !isReady) || !!force) {
+                if((!isFetching && !isReady) || !!force) {
                   setIsLoading(true);
+                  setIsFetching(true);
                   http.request(options).then(response => {
                     setIsLoading(false);
+                    setIsFetching(false);
                     setIsReady(true);
                     setData(response);
                     resolve(response);
                   }).catch(err => {
                     setIsLoading(false);
+                    setIsFetching(false);
                     setIsReady(true);
                     setError(err);
                     reject(err);
@@ -82,6 +86,8 @@ function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOp
                 }
             });
         }
+
+        let promise = new Promise(() => {});
 
         const refetch = () => {
             return request(true);
@@ -91,7 +97,7 @@ function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOp
             promise = request();
         }
 
-        return { data, isLoading, error, promise, refetch };
+        return [ refetch, { data, isLoading, isFetching, error, promise }];
     }
 }
 
@@ -112,22 +118,25 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
     
         const {data, setData} = useFetchData();
         const {data: error, setData: setError} = useFetchData();
-        const [isLoading, setIsLoading] = useState(false);
+        const [isLoading, setIsLoading] = useState(true);
+        const [isFetching, setIsFetching] = useState(false);
         const [isReady, setIsReady] = useState(false);
     
-        let promise;
         const request = (requestBody: RequestData, force?: boolean) => {
             options.data = requestBody;
             return new Promise((resolve, reject) => {
-                if((!isLoading && !isReady) || !!force) {
+                if((!isFetching && !isReady) || !!force) {
                   setIsLoading(true);
+                  setIsFetching(true);
                   http.request(options).then(response => {
                     setIsLoading(false);
+                    setIsFetching(false);
                     setIsReady(true);
                     setData(response);
                     resolve(response);
                   }).catch(err => {
                     setIsLoading(false);
+                    setIsFetching(false);
                     setIsReady(true);
                     setError(err);
                     reject(err);
@@ -136,7 +145,9 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
             });
         }
 
-        const resubmit = (data?: RequestData) => {
+        let promise = new Promise(() => {});
+
+        const reload = (data?: RequestData) => {
             data = data || {};
             return request(data, true);
         }
@@ -145,7 +156,7 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
             promise = request(body);
         }
 
-        return { data, isLoading, error, promise, resubmit };
+        return [ reload, { data, isLoading, isFetching, error, promise } ];
     }
 }
 

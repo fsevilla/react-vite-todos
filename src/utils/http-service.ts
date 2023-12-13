@@ -5,7 +5,7 @@ const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
 
 export interface HttpRequestOptions {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE';
-    path: string;
+    path?: string;
     baseUrl?: string;
     data?: RequestData;
     headers?: HttpHeaders;
