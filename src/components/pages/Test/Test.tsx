@@ -1,47 +1,52 @@
 import { useEffect } from "react";
+
 import { fetchTodos } from "../../../services/api/new-todo-api";
+import { fetchUsers } from "../../../services/api/user-api";
+import { fetchPosts } from "../../../services/api/post-api";
+
 import { Todo } from "../../../types/todo-type";
+import { Post } from "../../../types/post-type";
+import { User } from "../../../types/user-type";
+
+import { RequestsHandler, RequestsHandlerError, RequiredRequestFailure } from "../../../utils/requests-handler";
 
 export default function Test() {
 
-    const [refetch, { data, isLoading, error, promise }] = fetchTodos(); 
+    const [ getTodos ] = fetchTodos({ skipInitialRequest: true });
+    const [ getUsers ] = fetchUsers({ skipInitialRequest: true });
+    const [ getPosts ] = fetchPosts({ skipInitialRequest: true });
 
     useEffect(() => {
-        promise.then((response: any) => {
-            console.log('Tenemos respuesta!', response);
-        }).catch((err: any) => {
-            console.log('Fallo?????', err);
+        const rh = new RequestsHandler();
+        rh.parallel({
+            required: [getUsers],
+            optional: [getPosts, getTodos]
         })
+            .then((response) => {
+                handleFulfilledResponses(response as [Todo[], User[], Post[]]);
+            })
+            .catch((error) => {
+                handleFetchErrors(error);
+            });
     }, []);
 
-    if(isLoading) {
-        return <p>loading....</p>
+    function handleFulfilledResponses(data: [Todo[], User[], Post[]]) {
+        console.log('All promises fulfilled: ', data);
     }
 
-    if(error) {
-        return <p>Failed to retrieve todos!</p>
+    function handleFetchErrors(error: { error: RequestsHandlerError}) {
+        if(error.error instanceof RequiredRequestFailure) {
+            console.error('Required request failed: ', error);
+        } else {
+            console.log('Ok, we at least got users', error);
+        }
     }
-
-
-
-    function handleReloadTodosClick() {
-        console.log('Click to reload')
-    }
-
+    
     return (
         <>
             <h2>Test Page</h2>
             <p>Lorem ipsum dolor, sit amet consectetur adipisicing elit. Ad, eaque.</p>
-            {/* <button onClick={handleReloadTodosClick}>Reload</button> */}
-            {data && (
-                <ul>
-                    { data.map((item: Todo) => {
-                        return (
-                            <li key={item.id}>{item.title}</li>
-                        )
-                    })}
-                </ul>
-            )}
+            
         </>
     )
 }

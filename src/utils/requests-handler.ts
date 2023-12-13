@@ -55,7 +55,7 @@ const defaultHandlerRequestsConfig: HandlerRequestsConfig =  {
     asynchronous: true
 }
 
-class RequestsHandlerError extends Error {
+export class RequestsHandlerError extends Error {
     constructor(message: string) {
       super(message);
       this.name = "RequestsHandlerError";
@@ -63,7 +63,7 @@ class RequestsHandlerError extends Error {
     }
 }
 
-class RequestsHandlerDuplicateGroupError extends RequestsHandlerError {
+export class RequestsHandlerDuplicateGroupError extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
       this.name = "RequestsHandlerDuplicateGroupError";
@@ -71,7 +71,7 @@ class RequestsHandlerDuplicateGroupError extends RequestsHandlerError {
     }
 }
 
-class OptionalRequestFailure extends RequestsHandlerError {
+export class OptionalRequestFailure extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
       this.name = "OptionalRequestFailure";
@@ -79,19 +79,19 @@ class OptionalRequestFailure extends RequestsHandlerError {
     }
 }
 
-class UnknownRequestsHandlerError extends RequestsHandlerError {
-    constructor(message: string) {
-      super(message);
-      this.name = "UnknownRequestsHandlerError";
-      Object.setPrototypeOf(this, UnknownRequestsHandlerError.prototype);
-    }
-}
-
-class RequiredRequestFailure extends RequestsHandlerError {
+export class RequiredRequestFailure extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
       this.name = "RequiredRequestFailure";
       Object.setPrototypeOf(this, RequiredRequestFailure.prototype);
+    }
+}
+
+export class UnknownRequestsHandlerError extends RequestsHandlerError {
+    constructor(message: string) {
+      super(message);
+      this.name = "UnknownRequestsHandlerError";
+      Object.setPrototypeOf(this, UnknownRequestsHandlerError.prototype);
     }
 }
 
@@ -127,23 +127,34 @@ export class RequestsHandler {
                     ...defaultHandlerRequestsConfig,
                     ...config
                 }
-                const asyncRequests = config.asynchronous || this.settings.asynchronous;
+                // const asyncRequests = config.asynchronous || this.settings.asynchronous;
                 
                 if(groupName && this.groups[groupName] && !this.settings.allowDuplicateGroups) {
                     throw new RequestsHandlerDuplicateGroupError(`Group '${groupName} already exists'`);
                 }
 
-                const requestsGroupedByType = 'map' in requests ? { required: requests } : requests;
+                const promises: { type: string, request: HandlerRequest }[] = [];
 
-                if(!requestsGroupedByType.optional) {
-                    requestsGroupedByType.optional = [];
-                }
+                const requiredPromises = 'map' in requests ? requests : requests.required;
+                const optionalPromises = 'optional' in requests ? requests.optional! : [];
 
-                const allRequestsCount = requestsGroupedByType.required.length + requestsGroupedByType.optional.length;
+                requiredPromises.map(request => {
+                    promises.push({
+                        type: 'required',
+                        request
+                    })
+                });
+
+                optionalPromises.map(request => {
+                    promises.push({
+                        type: 'optional',
+                        request
+                    })
+                });
 
                 const groupResponse: HandlerRequestsResponse = {
                     isComplete: false,
-                    totalRequests: allRequestsCount,
+                    totalRequests: promises.length,
                     totalComplete: 0,
                     totalSuccessCount: 0,
                     totalErrorsCount: 0,
@@ -156,7 +167,8 @@ export class RequestsHandler {
 
                 // const promises: Promise<unknown>[] = [];
                 
-                requestsGroupedByType.required.map((request, index) => {
+                promises.map((requestItem, index) => {
+                    const { type: requestType, request } = requestItem;
                     let promise = request;
                     if(typeof request === 'function') {
                         promise = request();
@@ -166,11 +178,19 @@ export class RequestsHandler {
                     (promise as Promise<unknown>).then((response: any) => {
                         groupResponse.results[index] = response;
                         groupResponse.totalSuccessCount++;
-                        groupResponse.totalRequiredSuccessCount++;
+                        if(requestType === 'required') {
+                            groupResponse.totalRequiredSuccessCount++;
+                        } else {
+                            groupResponse.totalOptionalSuccessCount++;
+                        }
                     }).catch(error => {
                         groupResponse.results[index] = error;
                         groupResponse.totalErrorsCount++;
-                        groupResponse.totalRequiredErrorsCount++;
+                        if(requestType === 'required') {
+                            groupResponse.totalRequiredErrorsCount++;
+                        } else {
+                            groupResponse.totalOptionalErrorsCount++;
+                        }
                     }).finally(() => {
                         groupResponse.totalComplete++;
                         if(groupResponse.totalComplete === groupResponse.totalRequests) {

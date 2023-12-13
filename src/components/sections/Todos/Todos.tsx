@@ -111,7 +111,7 @@ export default function Todos() {
             {isLoading && <p>loading...</p>}
             {isError && <p>Failed to get data</p>}
             <TodoInputs />
-            <button onClick={getTodos}>Reload</button>
+            <button onClick={reload}>Reload</button>
             {items && (
                 <>
                     <TodosContext.Provider value={todosContextValue}>
