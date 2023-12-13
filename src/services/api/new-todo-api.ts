@@ -3,7 +3,7 @@ import { createApiService, CreateApiOptions } from '../../utils/create-api';
 
 export const TodoApi = createApiService({
   authHeather: false,
-  baseApiPath: 'todos2',
+  baseApiPath: 'todos',
   endpoints: [
     {
       name: 'fetchTodos',

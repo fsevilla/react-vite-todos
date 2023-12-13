@@ -18,7 +18,7 @@ export type ApiServiceEndpointResponse = [(data?: RequestData) => Promise<unknow
 
 export interface ApiServiceResults {
     data: any;
-    promise: Promise<unknown>;
+    promise: Promise<unknown> | undefined;
     isLoading: boolean;
     isFetching: boolean;
     error: any;
@@ -65,8 +65,10 @@ function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOp
         const [isFetching, setIsFetching] = useState(false);
         const [isReady, setIsReady] = useState(false);
     
+        let promise;
         const request = (force?: boolean) => {
             return new Promise((resolve, reject) => {
+                console.log('Is fetching or ready?', isFetching, isReady);
                 if((!isFetching && !isReady) || !!force) {
                   setIsLoading(true);
                   setIsFetching(true);
@@ -87,15 +89,15 @@ function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOp
             });
         }
 
-        let promise = new Promise(() => {});
+        if(config && !config.skipInitialRequest) {
+            promise = request();
+            console.log('trigger initial request');
+        }
 
         const refetch = () => {
             return request(true);
         }
 
-        if(config && !config.skipInitialRequest) {
-            promise = request();
-        }
 
         return [ refetch, { data, isLoading, isFetching, error, promise }];
     }
@@ -154,6 +156,7 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
 
         if(config && !config.skipInitialRequest) {
             promise = request(body);
+            console.log('Promise: ', promise);
         }
 
         return [ reload, { data, isLoading, isFetching, error, promise } ];
