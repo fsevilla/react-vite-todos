@@ -18,10 +18,8 @@ export default function Test() {
 
     useEffect(() => {
         const rh = new RequestsHandler();
-        rh.parallel({
-            required: [getUsers],
-            optional: [getPosts, getTodos]
-        })
+        rh.series([getUsers])
+            .parallel([getTodos, getPosts])
             .then((response) => {
                 handleFulfilledResponses(response as [Todo[], User[], Post[]]);
             })
@@ -46,7 +44,6 @@ export default function Test() {
         <>
             <h2>Test Page</h2>
             <p>Lorem ipsum dolor, sit amet consectetur adipisicing elit. Ad, eaque.</p>
-            
         </>
     )
 }
