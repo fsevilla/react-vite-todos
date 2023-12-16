@@ -169,7 +169,7 @@ export class RequestsHandler {
 
     async handleLabeledPromises(labeledPromises: LabeledPromise[], asynchronous: boolean) {
         const results: any[] = [];
-        let firstError: Error | null = null;
+        let optionalErrors = 0;
         try {
             if (!!asynchronous) {
                 const parallelPromises = labeledPromises.map(async ({ request, required }, index: number) => {
@@ -180,48 +180,58 @@ export class RequestsHandler {
                         results[index] = result;
                     } catch (error) {
                         if (required) {
-                            throw error;
-                        } else if (!firstError) {
-                            firstError = (error as AxiosError);
+                            throw new RequiredRequestFailure('One or many required requests failed');
+                        } else {
+                            optionalErrors++;
                         }
                     }
                 });
                 await Promise.all(parallelPromises);
             } else {
+                let index = 0;
                 for (const { request, required } of labeledPromises) {
+                    results.push(null);
                     try {
                         const requestPromise = typeof request === 'function' ? request(results) : request;
                         const result = await requestPromise;
-                        results.push(result);
+                        results[index] = result;
                     } catch (error) {
                         if (required) {
-                            throw error;
-                        } else if (!firstError) {
-                        firstError = (error as AxiosError);
-                      }
+                            throw new RequiredRequestFailure('One or many required requests failed');
+                        }
                     }
+                    index++;
                 }
             }
 
-            return results;
+            if(optionalErrors) {
+                throw new OptionalRequestFailure('One or many optional requests failed');
+            } else {
+                return results;
+            }
         } catch (error) {
-            for (const { required, request } of labeledPromises) {
-                try {
-                    if (required) {
-                        const requestPromise = typeof request === 'function' ? request() : request;
-                        await requestPromise;
-                    } else {
-                        console.error('Optional promise failed:', error);
-                    }
-                } catch (individualError) {
-                    if (required) {
-                        // If required promise fails individually, throw the original error
-                        throw error;
-                    } else {
-                    // If optional promise fails individually, log the error and continue
-                    console.error('Optional promise failed individually:', individualError);
-                    }
-                }
+            console.log('I dispatched the error: ', error);
+            // for (const { required, request } of labeledPromises) {
+            //     try {
+            //         if (required) {
+            //             const requestPromise = typeof request === 'function' ? request() : request;
+            //             await requestPromise;
+            //         }
+            //     } catch (individualError) {
+            //         if (required) {
+            //             // If required promise fails individually, throw the original error
+            //             throw error;
+            //         } else {
+            //         // If optional promise fails individually, log the error and continue
+            //         console.error('Optional promise failed individually:', individualError);
+            //         }
+            //     }
+            // }
+            if(error instanceof RequiredRequestFailure) {
+                throw {
+                    error,
+                    results
+                };
             }
             return results;
         }
@@ -230,28 +240,31 @@ export class RequestsHandler {
     private async handleAll() {
         let promises = this.queue.next();
         const results: any[] = [];
-
-        while(promises) {
-            const isQueue = promises[0] instanceof RequestQueue;
-            if(isQueue) {
-                const queuePromises = promises[0].list().map((item: LabeledPromise[])  => item[0]);
-                this.log('Will handle serial promises: ', queuePromises);
-                let responses = await this.handleLabeledPromises(queuePromises, false);
-                responses = results.length === 1 ? responses[0] : responses;
-                results.push(responses);
-            } else {
-                this.log('Will handle promises in parallel: ', promises);
-                let responses = await this.handleLabeledPromises(promises, true);
-                responses = results.length === 1 ? responses[0] : responses;
-                results.push(responses);
+        try {
+            while(promises) {
+                const isQueue = promises[0] instanceof RequestQueue;
+                if(isQueue) {
+                    const queuePromises = promises[0].list().map((item: LabeledPromise[])  => item[0]);
+                    this.log('Will handle serial promises: ', queuePromises);
+                    let responses = await this.handleLabeledPromises(queuePromises, false);
+                    responses = results.length === 1 ? responses[0] : responses;
+                    results.push(responses);
+                } else {
+                    this.log('Will handle promises in parallel: ', promises);
+                    let responses = await this.handleLabeledPromises(promises, true);
+                    responses = results.length === 1 ? responses[0] : responses;
+                    results.push(responses);
+                }
+                this.log('Settled all grouped promises: ', results);
+                promises = this.queue.next();
             }
-            this.log('Settled all grouped promises: ', results);
-            promises = this.queue.next();
+    
+            this.doOnSuccess(results);
+            return results;    
+        } catch(e) {
+            this.doOnFailure(e);
         }
-
         
-        this.doOnSuccess(results);
-        return results;
     }
 
     async handleNext(responseData?: any, queue?: RequestQueue) {
