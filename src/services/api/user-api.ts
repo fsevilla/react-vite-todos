@@ -1,7 +1,7 @@
 import { CreateApiOptions, createApiService } from '../../utils/create-api';
 
-export const api = createApiService({
-  authHeather: false,
+const options: CreateApiOptions = {
+  requiresAuth: false,
   baseApiPath: 'users',
   endpoints: [
     {
@@ -15,8 +15,8 @@ export const api = createApiService({
       }
     }
   ]
-} as CreateApiOptions)
+}
 
-
+export const api = createApiService(options);
   
 export const { fetchUsers } = api;

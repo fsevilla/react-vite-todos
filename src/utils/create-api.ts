@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { HttpService, HttpRequestOptions, RequestData } from "./http-service";
+import { HttpService, HttpRequestOptions, RequestData, RequestParams } from "./http-service";
 
 const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
 
@@ -10,30 +10,41 @@ export interface CreateApiOptions {
     endpoints?: HttpRequestOptions[];
     prepareData?: (requestBody: any) => {};
     skipDefaultEndpoints?: boolean;
-    transformResponse?: (response: any) => {};
-    transformErrorResponse?: (response: any) => {};
+    transformResponse?: (response: any) => void | {};
+    transformErrorResponse?: (response: any) => void | {};
 }
 
-export type ApiServiceEndpointResponse = [(data?: RequestData) => Promise<unknown>, ApiServiceResults];
+export type ApiServiceEndpointResponse = [(data?: RequestData|RequestArguments, args?: RequestArguments) => Promise<unknown>, ApiServiceResults];
 
 export interface ApiServiceResults {
     data: any;
-    promise: Promise<unknown> | undefined;
     isLoading: boolean;
     isFetching: boolean;
     error: any;
 }
 
+export type ApiServiceFetchEndpoint = (args?: RequestArguments, config?: UseApiConfig) => ApiServiceEndpointResponse;
+export type ApiServicePostEndpoint = (data?: RequestData, args?: RequestArguments, config?: UseApiConfig) => ApiServiceEndpointResponse;
+
 export type ApiServiceEndpoints = {
-    [key: string]: (data?: RequestData|UseApiConfig, config?: UseApiConfig) => ApiServiceEndpointResponse;
+    [key: string]: ApiServiceFetchEndpoint | ApiServicePostEndpoint;
 }
 
 export type UseApiConfig = {
     skipInitialRequest?: boolean;
 }
 
+interface RequestArguments {
+    params?: RequestParams;
+    queryParams?: RequestParams;
+}
+
 const defaultFetchApiConfig: UseApiConfig = {
     skipInitialRequest: false
+}
+
+const defaultDeleteApiConfig: UseApiConfig = {
+    skipInitialRequest: true
 }
 
 const defaultPostApiConfig: UseApiConfig = {
@@ -47,64 +58,68 @@ const defaultApiOptions: CreateApiOptions = {
     skipDefaultEndpoints: false
 }
 
-function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): (config?: UseApiConfig) => ApiServiceEndpointResponse {
-    return (config?: UseApiConfig) => {
-        const options: HttpRequestOptions = {
+function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): ApiServiceFetchEndpoint {
+    return (args?: RequestArguments, config?: UseApiConfig) => {
+        const initOptions: HttpRequestOptions = {
             baseUrl: baseApiPath,
             ...endpointConfig
         }
 
+        const defaults = endpointConfig.method === 'GET' ? defaultFetchApiConfig : defaultDeleteApiConfig;
+
         config = {
-            ...defaultFetchApiConfig,
+            ...defaults,
             ...config
         };
     
-        const {data, setData} = useFetchData();
-        const {data: error, setData: setError} = useFetchData();
-        const [isLoading, setIsLoading] = useState(true);
-        const [isFetching, setIsFetching] = useState(false);
-        const [isReady, setIsReady] = useState(false);
+        const { data, setData } = useFetchData();
+        const { data: error, setData: setError } = useFetchData();
+        const [ isLoading, setIsLoading ] = useState(true);
+        const [ isFetching, setIsFetching ] = useState(false);
+        const [ isReady, setIsReady ] = useState(false);
     
-        let promise;
-        const request = (force?: boolean) => {
+        const request = (args?: RequestArguments, force?: boolean) => {
             return new Promise((resolve, reject) => {
-                console.log('Is fetching or ready?', isFetching, isReady);
+                const options = {
+                    ...initOptions,
+                    ...args
+                }
+
                 if((!isFetching && !isReady) || !!force) {
-                  setIsLoading(true);
-                  setIsFetching(true);
-                  http.request(options).then(response => {
-                    setIsLoading(false);
-                    setIsFetching(false);
-                    setIsReady(true);
-                    setData(response);
-                    resolve(response);
-                  }).catch(err => {
-                    setIsLoading(false);
-                    setIsFetching(false);
-                    setIsReady(true);
-                    setError(err);
-                    reject(err);
-                  })
+                    setIsLoading(true);
+                    setIsFetching(true);
+                    http.request(options).then(response => {
+                        setIsLoading(false);
+                        setIsFetching(false);
+                        setIsReady(true);
+                        setData(response);
+                        resolve(response);
+                    }).catch(err => {
+                        setIsLoading(false);
+                        setIsFetching(false);
+                        setIsReady(true);
+                        setError(err);
+                        reject(err);
+                    })
                 }
             });
         }
 
         if(config && !config.skipInitialRequest) {
-            promise = request();
-            console.log('trigger initial request');
+            request(args);
         }
 
-        const refetch = () => {
-            return request(true);
+        const refetch = (args?: RequestArguments) => {
+            return request(args, true);
         }
 
 
-        return [ refetch, { data, isLoading, isFetching, error, promise }];
+        return [ refetch, { data, isLoading, isFetching, error }];
     }
 }
 
-function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): (data?: RequestData, config?: UseApiConfig) => ApiServiceEndpointResponse {
-    return (body?: RequestData, config?: UseApiConfig) => {
+function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): ApiServicePostEndpoint {
+    return (body?: RequestData, args?: RequestArguments, config?: UseApiConfig) => {
         body = body || {};
 
         const options: HttpRequestOptions = {
@@ -112,59 +127,57 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
             ...endpointConfig
         }
 
-
         config = {
             ...defaultPostApiConfig,
             ...config
         };
     
-        const {data, setData} = useFetchData();
-        const {data: error, setData: setError} = useFetchData();
-        const [isLoading, setIsLoading] = useState(true);
-        const [isFetching, setIsFetching] = useState(false);
-        const [isReady, setIsReady] = useState(false);
+        const { data, setData } = useFetchData();
+        const { data: error, setData: setError } = useFetchData();
+        const [ isLoading, setIsLoading ] = useState(true);
+        const [ isFetching, setIsFetching ] = useState(false);
+        const [ isReady, setIsReady ] = useState(false);
     
-        const request = (requestBody: RequestData, force?: boolean) => {
-            options.data = requestBody;
+        const request = (requestBody: RequestData, args?: RequestArguments, force?: boolean) => {
+            options.body = requestBody;
+            options.params = args?.params;
+            options.queryParams = args?.queryParams;
             return new Promise((resolve, reject) => {
                 if((!isFetching && !isReady) || !!force) {
-                  setIsLoading(true);
-                  setIsFetching(true);
-                  http.request(options).then(response => {
-                    setIsLoading(false);
-                    setIsFetching(false);
-                    setIsReady(true);
-                    setData(response);
-                    resolve(response);
-                  }).catch(err => {
-                    setIsLoading(false);
-                    setIsFetching(false);
-                    setIsReady(true);
-                    setError(err);
-                    reject(err);
-                  })
+                    setIsLoading(true);
+                    setIsFetching(true);
+                    http.request(options).then(response => {
+                        setIsLoading(false);
+                        setIsFetching(false);
+                        setIsReady(true);
+                        setData(response);
+                        resolve(response);
+                    }).catch(err => {
+                        setIsLoading(false);
+                        setIsFetching(false);
+                        setIsReady(true);
+                        setError(err);
+                        reject(err);
+                    })
                 }
             });
         }
 
-        let promise = new Promise(() => {});
-
-        const reload = (data?: RequestData) => {
+        const reload = (data?: RequestData, args?: RequestArguments) => {
             data = data || {};
-            return request(data, true);
+            return request(data, args, true);
         }
 
         if(config && !config.skipInitialRequest) {
-            promise = request(body);
-            console.log('Promise: ', promise);
+            request(body, args);
         }
 
-        return [ reload, { data, isLoading, isFetching, error, promise } ];
+        return [ reload, { data, isLoading, isFetching, error } ];
     }
 }
 
-function createApiServiceEndpoint (http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string): (params?: RequestData|UseApiConfig, config?: UseApiConfig) => ApiServiceEndpointResponse {
-    if(endpointConfig.method === 'GET') {
+function createApiServiceEndpoint (http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string) {
+    if(endpointConfig.method === 'GET' || endpointConfig.method === 'DELETE') {
         return createApiFetchEndpoint(http, endpointConfig, baseApiPath);
     } else {
         return createApiPostEndpoint(http, endpointConfig, baseApiPath);
@@ -175,7 +188,7 @@ function createApiServiceEndpointsMap (http: HttpService, endpoints: HttpRequest
     const endpointsMap: ApiServiceEndpoints = {};
     endpoints.map((endpoint: HttpRequestOptions) => {
         if(endpoint.name) {
-            endpointsMap[endpoint.name] = createApiServiceEndpoint(http, endpoint, baseApiPath);
+            endpointsMap[endpoint.name] = (createApiServiceEndpoint(http, endpoint, baseApiPath));
         } else {
             throw Error('Endpoint name missing');
         }
@@ -192,33 +205,13 @@ export function createApiService(apiOptions: CreateApiOptions = {}) {
 
     const baseApiPath = http.baseUrl;
 
-    // const predefinedEndpoints  = !!apiOptions.skipDefaultEndpoints ? {} : {
-    //     fetchData: (options?:HttpRequestOptions) => {
-    //         const url: string = apiOptions.baseApiPath || '';
-    //         return http.get(url, options);
-    //     },
-    //     getOne: (id: string|number) => {
-    //         const url: string = apiOptions.baseApiPath + `/${id}`;
-    //         return http.get(url);
-    //     },
-    //     createOne: (data: RequestData, options?:HttpRequestOptions) => {
-    //         const url: string = apiOptions.baseApiPath || '';
-    //         return http.post(url, data, options);
-    //     },
-    //     updateOne: (id: string|number, data: RequestData, options?:HttpRequestOptions) => {
-    //         const url: string = apiOptions.baseApiPath + `/${id}`;
-    //         return http.put(url, data, options);
-    //     }        
-    // };
-
     const customEndpoints = apiOptions.endpoints ? createApiServiceEndpointsMap(http, apiOptions.endpoints, baseApiPath) : {};
 
     const endpoints: ApiServiceEndpoints = {
-        // ...predefinedEndpoints,
         ...customEndpoints
     }
 
-   return endpoints;
+    return endpoints;
 }
 
 function useFetchData() {
@@ -236,4 +229,13 @@ function useFetchData() {
       data,
       setData: updateValue,
     };
-  }
+}
+
+export function isErrorOfType(err: any, instanceClass: any) {
+    try {
+        const testInstance = new instanceClass();
+        return err.name === testInstance.name;
+    } catch (e) {
+        return false;
+    }
+}

@@ -1,16 +1,4 @@
-/**
- * Document the following use cases:
- * 1.  construct and handler
- * 2.  pass promises
- * 3.  pass function => promise
- * 5.  parallel and series
- * 6.  pass response in series
- * 7.  modules (groups)
- * 8.  sequential use of series or parallel
- * 9.  final then/catch
- * 10. useState/custom hooks
- */
-
+import { AxiosError } from "axios";
 import { useState } from "react"; 
 
 const environment = {
@@ -56,6 +44,31 @@ export type HandlerRequestsResponse = {
 }
 
 type HandlerCallbackFn = (data: any) => any;
+
+interface LabeledPromise {
+    required: boolean,
+    request: HandlerRequest
+}
+
+type RequestsGroupConfig = {
+    asynchronous?: boolean;
+    onSuccess?: (responses: any) => any;
+    onWarning?: (responses: any) => any;
+    onError?: (responses: any) => any;
+    skipInitialRequest?: boolean;
+}
+
+type RequestsGroupResponse = [
+    (config?: RequestsGroupConfig) => void,
+    {
+        response: any,
+        isLoading: boolean,
+        isInitialLoad: boolean,
+        isSettled: boolean,
+        error: any,
+        warning: any
+    }
+]
 
 const defaultHandlerConfig: HandlerConfig =  {
     allowDuplicateGroups: false,
@@ -108,7 +121,7 @@ export class UnknownRequestsHandlerError extends RequestsHandlerError {
 }
 
 class RequestQueue {
-    queue: any[] = [];
+    private queue: any[] = [];
 
     add(promises: any) {
         if('map' in promises === false) {
@@ -119,6 +132,10 @@ class RequestQueue {
 
     next() {
         return this.queue.shift();
+    }
+
+    list() {
+        return this.queue;
     }
 }
 
@@ -143,16 +160,100 @@ export class RequestsHandler {
 
     }
 
-    private log(message:any) {
+    private log(...args: any[]) {
         if(!!environment.IS_PROD) return;
         const now = new Date().toDateString();
-        console.log(`[RequestHandler] (${now})`, message);
+        const logs = [`[RequestHandler] (${now})`, ...args];
+        console.log.apply(this, logs);
     }
 
-    handleNext(responseData?: any) {
-            const promises = this.queue.next();
+    async handleLabeledPromises(labeledPromises: LabeledPromise[], asynchronous: boolean) {
+        const results: any[] = [];
+        let firstError: Error | null = null;
+        try {
+            if (!!asynchronous) {
+                const parallelPromises = labeledPromises.map(async ({ request, required }) => {
+                    try {
+                        const requestPromise = typeof request === 'function' ? request() : request;
+                        const result = await requestPromise;
+                        results.push(result);
+                    } catch (error) {
+                        if (required) {
+                            throw error;
+                        } else if (!firstError) {
+                            firstError = (error as AxiosError);
+                        }
+                    }
+                });
+                await Promise.all(parallelPromises);
+            } else {
+                for (const { request, required } of labeledPromises) {
+                    try {
+                        const requestPromise = typeof request === 'function' ? request() : request;
+                        const result = await requestPromise;
+                        results.push(result);
+                    } catch (error) {
+                        if (required) {
+                            throw error;
+                        } else if (!firstError) {
+                        firstError = (error as AxiosError);
+                      }
+                    }
+                }
+            }
+
+            return results;
+        } catch (error) {
+            for (const { required, request } of labeledPromises) {
+                try {
+                    if (required) {
+                        const requestPromise = typeof request === 'function' ? request() : request;
+                        await requestPromise;
+                    } else {
+                        console.error('Optional promise failed:', error);
+                    }
+                } catch (individualError) {
+                    if (required) {
+                        // If required promise fails individually, throw the original error
+                        throw error;
+                    } else {
+                    // If optional promise fails individually, log the error and continue
+                    console.error('Optional promise failed individually:', individualError);
+                    }
+                }
+            }
+            return results;
+        }
+    }
+
+    private async handleAll() {
+        let promises = this.queue.next();
+        const results: any[] = [];
+
+        while(promises) {
+            const isQueue = promises[0] instanceof RequestQueue;
+            if(isQueue) {
+                const queuePromises = promises[0].list().map((item: LabeledPromise[])  => item[0]);
+                this.log('Will handle serial promises: ', queuePromises);
+                const responses = await this.handleLabeledPromises(queuePromises, false);
+                results.push(responses);
+            } else {
+                this.log('Will handle promises in parallel: ', promises);
+                const responses = await this.handleLabeledPromises(promises, true);
+                results.push(responses);
+            }
+
+            promises = this.queue.next();
+        }
+
+        this.log('Processed all promises: ', results);
+        return results;
+    }
+
+    async handleNext(responseData?: any, queue?: RequestQueue) {
+            queue = queue || this.queue;
+            const promises = queue.next();
             if(promises) {
-                this.log('Will handle promises in queue');
                 const groupResponse: HandlerRequestsResponse = {
                     isSettled: false,
                     totalRequests: promises.length,
@@ -165,63 +266,71 @@ export class RequestsHandler {
                     totalOptionalErrorsCount: 0,
                     results: []
                 };
-                
-                promises.map((requestItem: { type: string, request: HandlerRequest }, index: number) => {
-                    const { type: requestType, request } = requestItem;
-                    let promise = request;
 
-                    if(typeof request === 'function') {
-                        promise = request(responseData);
-                    } else {
-                        console.log('This promise was not a function', promise);
-                    }
 
+                this.log('Will handle promises in queue', promises);
+                const isQueue = promises[0] instanceof RequestQueue;
+                if(isQueue) {
+                    console.log('These are the serial promises: ', promises);
+                } else {
                     groupResponse.results.push(null);
-
-                    (promise as Promise<unknown>).then((response: any) => {
-                        groupResponse.results[index] = response;
-                        groupResponse.totalSuccessCount++;
-                        if(requestType === 'required') {
-                            groupResponse.totalRequiredSuccessCount++;
+                
+                    promises.map((requestItem: LabeledPromise, index: number) => {
+                        const { required, request } = requestItem;
+                        let promise = request;
+    
+                        if(typeof request === 'function') {
+                            promise = request(responseData);
                         } else {
-                            groupResponse.totalOptionalSuccessCount++;
+                            this.log('Failed to handle promise', promise);
                         }
-                    }).catch(error => {
-                        groupResponse.results[index] = error;
-                        groupResponse.totalErrorsCount++;
-                        if(requestType === 'required') {
-                            groupResponse.totalRequiredErrorsCount++;
-                        } else {
-                            groupResponse.totalOptionalErrorsCount++;
-                        }
-                    }).finally(() => {
-                        groupResponse.totalComplete++;
-                        if(groupResponse.totalComplete === groupResponse.totalRequests) {
-                            if(groupResponse.totalRequiredErrorsCount) {
-                                this.isSettled = true;
-                                this.doOnFailure({
-                                    results: groupResponse,
-                                    error: new RequiredRequestFailure('One or many required requests failed')
-                                });
-                            } else if(groupResponse.totalOptionalErrorsCount) {
-                                this.responses.push(groupResponse);
-                                this.hasWarnings = true;
-                                this.handleNext(groupResponse);
-                            } else if (groupResponse.totalRequests === groupResponse.totalSuccessCount) {
-                                this.log('Group fulfilled');
-                                const results = groupResponse.totalRequests === 1 ? groupResponse.results[0] : groupResponse.results;
-                                this.responses.push(results);
-                                this.handleNext(results);
+    
+    
+                        (promise as Promise<unknown>).then((response: any) => {
+                            groupResponse.results[index] = response;
+                            groupResponse.totalSuccessCount++;
+                            if(required) {
+                                groupResponse.totalRequiredSuccessCount++;
                             } else {
-                                this.isSettled = true;
-                                this.doOnFailure({
-                                    results: groupResponse,
-                                    error: new UnknownRequestsHandlerError('An unknown requests handler error occurred')
-                                });
+                                groupResponse.totalOptionalSuccessCount++;
                             }
-                        }
+                        }).catch(error => {
+                            groupResponse.results[index] = error;
+                            groupResponse.totalErrorsCount++;
+                            if(required) {
+                                groupResponse.totalRequiredErrorsCount++;
+                            } else {
+                                groupResponse.totalOptionalErrorsCount++;
+                            }
+                        }).finally(() => {
+                            groupResponse.totalComplete++;
+                            if(groupResponse.totalComplete === groupResponse.totalRequests) {
+                                if(groupResponse.totalRequiredErrorsCount) {
+                                    this.isSettled = true;
+                                    this.doOnFailure({
+                                        results: groupResponse,
+                                        error: new RequiredRequestFailure('One or many required requests failed')
+                                    });
+                                } else if(groupResponse.totalOptionalErrorsCount) {
+                                    this.responses.push(groupResponse);
+                                    this.hasWarnings = true;
+                                    this.handleNext(groupResponse);
+                                } else if (groupResponse.totalRequests === groupResponse.totalSuccessCount) {
+                                    this.log('Group fulfilled', this.responses);
+                                    const results = groupResponse.totalRequests === 1 ? groupResponse.results[0] : groupResponse.results;
+                                    this.responses.push(results);
+                                    this.handleNext(results);
+                                } else {
+                                    this.isSettled = true;
+                                    this.doOnFailure({
+                                        results: groupResponse,
+                                        error: new UnknownRequestsHandlerError('An unknown requests handler error occurred')
+                                    });
+                                }
+                            }
+                        });
                     });
-                });
+                }
             } else {
                 if(this.hasWarnings) {
                     this.isSettled = true;
@@ -238,34 +347,34 @@ export class RequestsHandler {
             }
     }
 
-    requests(groupName: string|null, requests: HandlerRequests | HandlerRequestTypes, config?: HandlerRequestsConfig) {
+    requests(groupName: string | null, requests: HandlerRequests | HandlerRequestTypes, config?: HandlerRequestsConfig) {
             try {
                 config = config || {};
                 config = {
                     ...defaultHandlerRequestsConfig,
                     ...config
                 }
-                const asyncRequests = config.asynchronous || this.settings.asynchronous;
+                const asyncRequests = typeof config.asynchronous === 'boolean' ? config.asynchronous : this.settings.asynchronous;
                 
                 if(groupName && this.groups[groupName] && !this.settings.allowDuplicateGroups) {
                     throw new RequestsHandlerDuplicateGroupError(`Group '${groupName} already exists'`);
                 }
 
-                const promises: { type: string, request: HandlerRequest }[] = [];
+                const promises: LabeledPromise[] = [];
 
                 const requiredPromises = 'map' in requests ? requests : requests.required;
                 const optionalPromises = 'optional' in requests ? requests.optional! : [];
 
                 requiredPromises.map(request => {
                     promises.push({
-                        type: 'required',
+                        required: true,
                         request
                     })
                 });
 
                 optionalPromises.map(request => {
                     promises.push({
-                        type: 'optional',
+                        required: false,
                         request
                     })
                 });
@@ -273,14 +382,17 @@ export class RequestsHandler {
                 if(asyncRequests) {
                     this.queue.add(promises);
                 } else {
+                    const newQueue = new RequestQueue();
                     promises.map(promise => {
-                        this.queue.add([promise]);
+                        newQueue.add([promise]);
                     });
+                    this.queue.add(newQueue);
                 }
 
                 if(!this.isStarted) {
+                    // Use eventloop to allow all promises to be registered
+                    setTimeout(this.handleAll.bind(this), 0);
                     this.isStarted = true;
-                    this.handleNext();
                 }
                 
             } catch(e) {
@@ -292,15 +404,11 @@ export class RequestsHandler {
     }
 
     parallel(requests: HandlerRequests | HandlerRequestTypes) {
-        // const timestamp = new Date().getTime();
-        // const groupName: string = `module${this.groupsCount + 1}-${timestamp}`;
         this.requests(null, requests, { asynchronous: true });
         return this;
     }
 
     series(requests: HandlerRequests | HandlerRequestTypes) {
-        // const timestamp = new Date().getTime();
-        // const groupName: string = `module${this.groupsCount + 1}-${timestamp}`;
         this.requests(null, requests, { asynchronous: false });
         return this;
     }
@@ -315,10 +423,7 @@ export class RequestsHandler {
     }
 }
 
-// const requestHandler = new RequestsHandler();
-// console.log('Is requested again', requestHandler);
-
-export function RequestsGroup(requests: HandlerRequests | HandlerRequestTypes, config?: HandlerRequestsConfig) {
+export function RequestsGroup(requests: HandlerRequests | HandlerRequestTypes, config?: RequestsGroupConfig): RequestsGroupResponse {
     const [handlerResponses, setHandlerResponses] = useState<any>();
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<null|{results: HandlerRequestsResponse, error: RequiredRequestFailure}>(null);
@@ -328,18 +433,30 @@ export function RequestsGroup(requests: HandlerRequests | HandlerRequestTypes, c
 
     const requestHandler = new RequestsHandler();
 
-    const reload = () => {
+    const reload = (config?: RequestsGroupConfig) => {
         if(!isLoading && !isSettled && !requestHandler.isSettled) {
             setIsLoading(true);
-            requestHandler.requests(null, requests, config).then(responses => {
+            const rhConfig: HandlerRequestsConfig = {
+                asynchronous: config?.asynchronous || false
+            }
+            requestHandler.requests(null, requests, rhConfig).then(responses => {
                 setHandlerResponses(responses);
                 setIsLoading(false);
                 setIsSettled(true);
+                if(typeof config?.onSuccess === 'function') {
+                    config.onSuccess(responses);
+                }
             }).catch(error => {
                 if(error.error instanceof RequiredRequestFailure) {
                     setError(error);
+                    if(typeof config?.onError === 'function') {
+                        config.onError(error);
+                    }
                 } else {
                     setWarning(error);
+                    if(typeof config?.onWarning === 'function') {
+                        config.onWarning(error);
+                    }
                 }
                 setIsLoading(false);
                 setIsSettled(true);
@@ -349,7 +466,9 @@ export function RequestsGroup(requests: HandlerRequests | HandlerRequestTypes, c
         }
     }
 
-    reload();
+    if(!config?.skipInitialRequest) {
+        reload(config);
+    }
 
-    return { response: handlerResponses, isLoading, isInitialLoad, isSettled, error, warning, reload };
+    return [ reload, { response: handlerResponses, isLoading, isInitialLoad, isSettled, error, warning }];
 }

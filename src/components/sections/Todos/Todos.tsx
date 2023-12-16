@@ -1,94 +1,61 @@
 import { useEffect, useState } from "react";
-import { AxiosError } from "axios";
-
-import { fetchTodos } from "../../../services/api/new-todo-api";
-import { fetchUsers } from "../../../services/api/user-api";
-
-import { TodosContext } from "../../../store/todos-context";
-import { Todo } from "../../../types/todo-type";
-import { User } from "../../../types/user-type";
-
-import { RequestsHandler } from "../../../utils/requests-handler";
 
 import TodoDetails from "./TodoDetails/TodoDetails";
 import TodoInputs from "./TodoInputs/TodoInputs";
 import TodosList from "./TodosList/TodosList";
 
-// import todos from './todos.json';
+import { fetchTodos } from "../../../services/api/new-todo-api";
+import { fetchUsers } from "../../../services/api/user-api";
+
+import { RequestsGroup, RequestsHandler } from "../../../utils/requests-handler";
+
+import { TodosContext } from "../../../store/todos-context";
+import { Todo } from "../../../types/todo-type";
+import { User } from "../../../types/user-type";
+
+type TodoUserResponse = [Todo[], User[]];
 
 export default function Todos() {
 
     const [ selectedTodo, setSelectedTodo ] = useState({title: ''});
-    const [ items, setItems ] = useState<Todo[]>([]);
-    const [ isLoading, setIsLoading ] = useState(false);
-    const [ isError, setIsError ] = useState(false);
-    
-    const [getTodos] = fetchTodos({skipInitialRequest: true});
-    const [getUsers] = fetchUsers({skipInitialRequest: true});
-    
-    useEffect(() => {
-        fetchData();
-    }, []);
+    const [ items, setItems ] = useState<Todo[]|null>(null);
 
-    function fetchData() {
-        setIsLoading(true);
-        const requestsHandler = new RequestsHandler();
-        requestsHandler.parallel([getUsers, getTodos]).then((responses) => {
-            handleApiResponses((responses as [User[], Todo[]]));
-            setIsLoading(false);
-            setIsError(false);
-        }).catch(() => {
-            setIsLoading(false);
-            setIsError(true);
-        });
-    }
+    const [ getTodos ] = fetchTodos({}, { skipInitialRequest: true });
+    const [ getUsers ] = fetchUsers({}, { skipInitialRequest: true });
 
-    function sendGetUsers(data: any) {
-        console.log('Here is some data: ', data);
-        return new Promise((resolve, reject) => {
-            getUsers().then((response) => {
-                console.log('I can manage this response individually: ', response);
-                resolve(response);
-            }).catch((error: AxiosError) => {
-                console.log('I can also manage errors individually: ', error);
-                reject(error);
-            });
-        });
-    }
+    const [ fetchData, {response, isLoading, error, warning} ] = RequestsGroup({
+        required: [getTodos],
+        optional: [getUsers]
+    }, {
+        onSuccess: handleFetchItems,
+        onWarning: handleFetchItemsWarning
+    });
 
-    function sendGetTodos() {
-        return new Promise((resolve, reject) => {
-            getTodos().then((response) => {
-                console.log('I can manage this todos response individually: ', response);
-                resolve(response);
-            }).catch((error: AxiosError) => {
-                console.log('I can also manage errors individually: ', error);
-                reject(error);
-            });
-        });
-    }
 
-    function reload() {
-        fetchData();
-    }
+    function reload() { }
 
     type UsersMap = {
         [key: number]: User;
     }
 
-    function handleApiResponses(data: [User[], Todo[]]) {
-        const [users, todos] = data;
+    function handleFetchItems(response: TodoUserResponse) {
+        const [todos, users] = response;
         const usersMap: UsersMap = {};
         users.map(user => {
             usersMap[user.id!] = user;
         });
-
-        const items: Todo[] = todos.map(item => {
-            item.user = usersMap[item.userId!];
-            return item;
+        const items: Todo[] = todos.map(todo => {
+            todo.user = usersMap[todo.userId!];
+            return todo;
         });
-
         setItems(items);
+    }
+
+    function handleFetchItemsWarning(error: { results: [{ results: TodoUserResponse }]}) {
+        console.log('Got todos only', error.results[0].results);
+        const response = error.results[0].results;
+        const [todos] = response;
+        setItems(todos);
     }
 
     function handleSelectTodo(item: Todo) {
@@ -109,7 +76,8 @@ export default function Todos() {
         <>
             
             {isLoading && <p>loading...</p>}
-            {isError && <p>Failed to get data</p>}
+            {error && <p>Failed to get Todos</p>}
+            {warning && <p>Failed to get Users only</p>}
             <TodoInputs />
             <button onClick={reload}>Reload</button>
             {items && (

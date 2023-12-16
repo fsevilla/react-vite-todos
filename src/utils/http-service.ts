@@ -1,20 +1,22 @@
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosError } from 'axios';
 import { instanceToPlain } from 'class-transformer';
 
-const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
+const apiUrl = '';
 
 export interface HttpRequestOptions {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE';
     path?: string;
     baseUrl?: string;
-    data?: RequestData;
+    body?: RequestData;
     headers?: HttpHeaders;
     name?: string;
+    params?: RequestParams;
+    queryParams?: RequestParams;
     onError?: (response: any) => void | unknown;
     onSuccess?: (response: any) => void | unknown;
-    prepareData?: (requestData: RequestData) => RequestData;
-    transformErrorResponse?: (response: any) => AxiosResponse;
-    transformResponse?: (response: any) => AxiosResponse;
+    prepareData?: (requestData: any) => any;
+    transformErrorResponse?: (response: any) => any;
+    transformResponse?: (response: any) => any;
 }
 
 export type HttpHeaders = {
@@ -25,14 +27,27 @@ export type RequestData = {
     [key: string|number]: any
 }
 
+export type RequestParams = {
+    [key: string]: unknown;
+}
+
 const defaultHttpRequestOptions: HttpRequestOptions = {
     method: 'GET',
-    path: ''
+    path: '',
+    params: {}
+}
+
+function objectToQueryString(queryParams: RequestParams) {
+    return  Object.keys(queryParams).map((key) => encodeURIComponent(key) + '=' + encodeURIComponent(queryParams[key] + '')).join('&');
+}
+
+function replaceParamsInUrl(url: string, params: RequestParams) {
+    return url.replace(/\{(\w+)\}/g, (match, key) => params![key] ? params![key] + '' : '');
 }
 
 export class HttpService {
-    baseUrl: string = '';
-    basePath: string = '';
+    baseUrl = '';
+    basePath = '';
 
     constructor(path?: string, url?: string) {
         this.basePath = path || '';
@@ -47,11 +62,13 @@ export class HttpService {
 
         const baseUrl: string = options.baseUrl || this.baseUrl;
         const path: string = options.path || this.basePath;
-        const requestData = options.prepareData ? options.prepareData(options.data || {}) : options.data;
+        const requestData = options.prepareData ? options.prepareData(options.body || {}) : options.body;
+        const formattedPath: string = options.params ? replaceParamsInUrl(path, options.params) : path;
+        const fullPath: string = options.queryParams ? formattedPath + '?' + objectToQueryString(options.queryParams) : formattedPath;
 
         return new Promise((resolve, reject) => {
             axios.request({
-                url: baseUrl + path,
+                url: baseUrl + fullPath,
                 method: options.method,
                 data: instanceToPlain(requestData),
             }).then((response: {data: any}) => {
@@ -90,10 +107,10 @@ export class HttpService {
         return this.request(options);
     }
 
-    post(url: string, data: RequestData, options?:HttpRequestOptions) {
+    post(url: string, body: RequestData, options?:HttpRequestOptions) {
         options = {
             ...options,
-            data,
+            body,
             method: 'POST',
             path: url
         }
@@ -101,10 +118,10 @@ export class HttpService {
         return this.request(options);
     }
 
-    put(url: string, data: RequestData, options?:HttpRequestOptions) {
+    put(url: string, body: RequestData, options?:HttpRequestOptions) {
         options = {
             ...options,
-            data,
+            body,
             method: 'PUT',
             path: url
         }

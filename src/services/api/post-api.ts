@@ -2,12 +2,11 @@ import { CreateApiOptions, createApiService } from '../../utils/create-api';
 
 export const api = createApiService({
   authHeather: false,
-  baseApiPath: 'posts2',
+  baseApiPath: 'posts',
   endpoints: [
-    { name: 'fetchPosts', method: 'GET' }
+    { name: 'fetchPosts', method: 'GET' },
+    { name: 'fetchOnePost', method: 'GET', path: 'posts/{id}' }
   ]
 } as CreateApiOptions)
 
-
-  
-export const { fetchPosts } = api;
+export const { fetchPosts, fetchOnePost } = api;
