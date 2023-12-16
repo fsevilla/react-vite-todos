@@ -26,12 +26,12 @@ export default function Test() {
 
     useEffect(() => {
         const rh = new RequestsHandler();
-        rh.series({
+        rh.parallel({
             required: [getTodos],
             optional: [getUsers, getPosts]
         })
             .then(response => {
-                // handleFulfilledResponses(response[0]);
+                // handleFulfilledResponses(response);
                 console.log('Got all: ', response);
             }).catch(error => {
                 console.log('A promise failed: ', error)

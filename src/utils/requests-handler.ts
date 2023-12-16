@@ -198,6 +198,8 @@ export class RequestsHandler {
                     } catch (error) {
                         if (required) {
                             throw new RequiredRequestFailure('One or many required requests failed');
+                        } else {
+                            optionalErrors++;
                         }
                     }
                     index++;
@@ -210,38 +212,16 @@ export class RequestsHandler {
                 return results;
             }
         } catch (error) {
-            console.log('I dispatched the error: ', error);
-            // for (const { required, request } of labeledPromises) {
-            //     try {
-            //         if (required) {
-            //             const requestPromise = typeof request === 'function' ? request() : request;
-            //             await requestPromise;
-            //         }
-            //     } catch (individualError) {
-            //         if (required) {
-            //             // If required promise fails individually, throw the original error
-            //             throw error;
-            //         } else {
-            //         // If optional promise fails individually, log the error and continue
-            //         console.error('Optional promise failed individually:', individualError);
-            //         }
-            //     }
-            // }
-            if(error instanceof RequiredRequestFailure) {
-                throw {
-                    error,
-                    results
-                };
-            }
-            return results;
+            throw { error, results };
         }
     }
 
     private async handleAll() {
         let promises = this.queue.next();
+        let optionalError: null | OptionalRequestFailure = null;
         const results: any[] = [];
-        try {
-            while(promises) {
+        while(promises) {
+            try {
                 const isQueue = promises[0] instanceof RequestQueue;
                 if(isQueue) {
                     const queuePromises = promises[0].list().map((item: LabeledPromise[])  => item[0]);
@@ -257,111 +237,30 @@ export class RequestsHandler {
                 }
                 this.log('Settled all grouped promises: ', results);
                 promises = this.queue.next();
+
+            } catch(e) {
+                if((e as {error: RequestsHandlerError}).error instanceof RequiredRequestFailure) {
+                    this.doOnFailure(e);
+                    return e;
+                } else {
+                    optionalError = (e as {error: OptionalRequestFailure}).error;
+                    const responses = (e as {results: any[]}).results;
+                    results.push(responses);
+                    promises = this.queue.next();
+                }
             }
-    
-            this.doOnSuccess(results);
-            return results;    
-        } catch(e) {
-            this.doOnFailure(e);
         }
-        
-    }
 
-    async handleNext(responseData?: any, queue?: RequestQueue) {
-            queue = queue || this.queue;
-            const promises = queue.next();
-            if(promises) {
-                const groupResponse: HandlerRequestsResponse = {
-                    isSettled: false,
-                    totalRequests: promises.length,
-                    totalComplete: 0,
-                    totalSuccessCount: 0,
-                    totalErrorsCount: 0,
-                    totalRequiredSuccessCount: 0,
-                    totalRequiredErrorsCount: 0,
-                    totalOptionalSuccessCount: 0,
-                    totalOptionalErrorsCount: 0,
-                    results: []
-                };
-
-
-                this.log('Will handle promises in queue', promises);
-                const isQueue = promises[0] instanceof RequestQueue;
-                if(isQueue) {
-                    console.log('These are the serial promises: ', promises);
-                } else {
-                    groupResponse.results.push(null);
-                
-                    promises.map((requestItem: LabeledPromise, index: number) => {
-                        const { required, request } = requestItem;
-                        let promise = request;
-    
-                        if(typeof request === 'function') {
-                            promise = request(responseData);
-                        } else {
-                            this.log('Failed to handle promise', promise);
-                        }
-    
-    
-                        (promise as Promise<unknown>).then((response: any) => {
-                            groupResponse.results[index] = response;
-                            groupResponse.totalSuccessCount++;
-                            if(required) {
-                                groupResponse.totalRequiredSuccessCount++;
-                            } else {
-                                groupResponse.totalOptionalSuccessCount++;
-                            }
-                        }).catch(error => {
-                            groupResponse.results[index] = error;
-                            groupResponse.totalErrorsCount++;
-                            if(required) {
-                                groupResponse.totalRequiredErrorsCount++;
-                            } else {
-                                groupResponse.totalOptionalErrorsCount++;
-                            }
-                        }).finally(() => {
-                            groupResponse.totalComplete++;
-                            if(groupResponse.totalComplete === groupResponse.totalRequests) {
-                                if(groupResponse.totalRequiredErrorsCount) {
-                                    this.isSettled = true;
-                                    this.doOnFailure({
-                                        results: groupResponse,
-                                        error: new RequiredRequestFailure('One or many required requests failed')
-                                    });
-                                } else if(groupResponse.totalOptionalErrorsCount) {
-                                    this.responses.push(groupResponse);
-                                    this.hasWarnings = true;
-                                    this.handleNext(groupResponse);
-                                } else if (groupResponse.totalRequests === groupResponse.totalSuccessCount) {
-                                    this.log('Group fulfilled', this.responses);
-                                    const results = groupResponse.totalRequests === 1 ? groupResponse.results[0] : groupResponse.results;
-                                    this.responses.push(results);
-                                    this.handleNext(results);
-                                } else {
-                                    this.isSettled = true;
-                                    this.doOnFailure({
-                                        results: groupResponse,
-                                        error: new UnknownRequestsHandlerError('An unknown requests handler error occurred')
-                                    });
-                                }
-                            }
-                        });
-                    });
-                }
-            } else {
-                if(this.hasWarnings) {
-                    this.isSettled = true;
-                    this.doOnFailure({
-                        results: this.responses,
-                        error: new OptionalRequestFailure('One or many optional requests failed')
-                    });
-                } else {
-                    this.log('Requests queue is clear');
-                    const responses = this.responses.length === 1 ? this.responses[0] : this.responses;
-                    this.isSettled = true;
-                    this.doOnSuccess(responses);
-                }
-            }
+        if(optionalError) {
+            this.doOnFailure({
+                error: optionalError,
+                results
+            })
+        } else {
+            const responses = results.length === 1 ? results[0] : results;
+            this.doOnSuccess(responses);
+            return responses;    
+        }
     }
 
     requests(groupName: string | null, requests: HandlerRequests | HandlerRequestTypes, config?: HandlerRequestsConfig) {
