@@ -190,7 +190,7 @@ export class RequestsHandler {
             } else {
                 for (const { request, required } of labeledPromises) {
                     try {
-                        const requestPromise = typeof request === 'function' ? request() : request;
+                        const requestPromise = typeof request === 'function' ? request(results) : request;
                         const result = await requestPromise;
                         results.push(result);
                     } catch (error) {
@@ -236,20 +236,22 @@ export class RequestsHandler {
             if(isQueue) {
                 const queuePromises = promises[0].list().map((item: LabeledPromise[])  => item[0]);
                 this.log('Will handle serial promises: ', queuePromises);
-                const responses = await this.handleLabeledPromises(queuePromises, false);
+                let responses = await this.handleLabeledPromises(queuePromises, false);
+                responses = results.length === 1 ? responses[0] : responses;
                 results.push(responses);
             } else {
                 this.log('Will handle promises in parallel: ', promises);
-                const responses = await this.handleLabeledPromises(promises, true);
+                let responses = await this.handleLabeledPromises(promises, true);
+                responses = results.length === 1 ? responses[0] : responses;
                 results.push(responses);
             }
-
+            this.log('Settled all grouped promises: ', results);
             promises = this.queue.next();
         }
 
-        const responses = results.length === 1 ? results[0] : results;
-        this.doOnSuccess(responses);
-        return responses;
+        
+        this.doOnSuccess(results);
+        return results;
     }
 
     async handleNext(responseData?: any, queue?: RequestQueue) {

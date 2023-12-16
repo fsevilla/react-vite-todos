@@ -26,18 +26,18 @@ export default function Test() {
 
     useEffect(() => {
         const rh = new RequestsHandler();
-        rh.parallel([getUsers, getTodos, getPosts])
-            .parallel([getUsers])
+        rh.series({
+            required: [getTodos],
+            optional: [getUsers, getPosts]
+        })
             .then(response => {
                 // handleFulfilledResponses(response[0]);
                 console.log('Got all: ', response);
-            });
+            }).catch(error => {
+                console.log('A promise failed: ', error)
+            })
     }, []);
 
-    function getPostById(data: any) {
-        console.log('Got this data from the previous request', data);
-        return getOnePost({params: {id: 10}});
-    }
 
     // if(isInitialLoad) {
     //     if(response) {
