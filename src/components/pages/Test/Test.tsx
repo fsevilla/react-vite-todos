@@ -26,11 +26,10 @@ export default function Test() {
 
     useEffect(() => {
         const rh = new RequestsHandler();
-        rh.parallel([getUsers])
-            .series([getTodos, getPosts])
-            .parallel([getTodos, getPosts, getUsers])
+        rh.parallel([getUsers, getTodos, getPosts])
+            .parallel([getUsers])
             .then(response => {
-                // handleFulfilledResponses(response);
+                // handleFulfilledResponses(response[0]);
                 console.log('Got all: ', response);
             });
     }, []);

@@ -172,11 +172,12 @@ export class RequestsHandler {
         let firstError: Error | null = null;
         try {
             if (!!asynchronous) {
-                const parallelPromises = labeledPromises.map(async ({ request, required }) => {
+                const parallelPromises = labeledPromises.map(async ({ request, required }, index: number) => {
+                    results.push(null);
                     try {
                         const requestPromise = typeof request === 'function' ? request() : request;
                         const result = await requestPromise;
-                        results.push(result);
+                        results[index] = result;
                     } catch (error) {
                         if (required) {
                             throw error;
@@ -246,8 +247,9 @@ export class RequestsHandler {
             promises = this.queue.next();
         }
 
-        this.log('Processed all promises: ', results);
-        return results;
+        const responses = results.length === 1 ? results[0] : results;
+        this.doOnSuccess(responses);
+        return responses;
     }
 
     async handleNext(responseData?: any, queue?: RequestQueue) {
@@ -391,7 +393,7 @@ export class RequestsHandler {
 
                 if(!this.isStarted) {
                     // Use eventloop to allow all promises to be registered
-                    setTimeout(this.handleAll.bind(this), 0);
+                    setTimeout(() => this.handleAll(), 0);
                     this.isStarted = true;
                 }
                 
