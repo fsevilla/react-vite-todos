@@ -7,9 +7,9 @@ export default function TodosList(props: TodosListProps) {
 
     return (
         <>
-            {todos.map((todo: Todo) => {
+            {todos.map((todo: Todo, idx) => {
                 return (
-                    <TodoItem key={todo.id} todo={todo} />
+                    <TodoItem key={todo.id} todo={todo} isOdd={idx % 2 === 1} />
                 )
             })}
         </>

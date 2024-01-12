@@ -30,3 +30,7 @@ header .menu > li > a {
     text-decoration: none;
     font-size: 18px;
 }
+
+.heading {
+    font-size: 40px;
+}

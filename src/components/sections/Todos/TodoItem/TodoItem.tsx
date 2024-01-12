@@ -9,6 +9,11 @@ export default function TodoItem (props: TodoItemProps) {
     const { selectTodo } = useContext(TodosContext);
 
     return (
-        <div onClick={() => {selectTodo(todo)}}>{todo.title} (assigned to: {todo.user?.name})</div>
+        <div
+            className="heading"
+            style={{
+                'backgroundColor': props.isOdd ? 'lightgray' : undefined
+            }}
+            onClick={() => {selectTodo(todo)}}>{todo.title} (assigned to: {todo.user?.name})</div>
     )
 }

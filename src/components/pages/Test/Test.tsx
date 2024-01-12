@@ -8,7 +8,7 @@ import { Todo } from "../../../types/todo-type";
 import { Post } from "../../../types/post-type";
 import { User } from "../../../types/user-type";
 
-import { HandlerRequestsResponse, RequestsHandler, RequestsHandlerError, RequiredRequestFailure } from "../../../utils/requests-handler";
+import { HandlerRequestsResponse, RequestsHandler, RequestsHandlerError, RequiredRequestFailure, RequestsGroup } from "../../../utils/requests-handler";
 
 type UsersMap = {
     [key: number]: User;
@@ -18,48 +18,33 @@ export default function Test() {
 
     const [ getTodos ] = fetchTodos({}, { skipInitialRequest: true });
     const [ getUsers ] = fetchUsers({}, { skipInitialRequest: true });
-    const [ getPosts ] = fetchPosts({}, { skipInitialRequest: true });
-    const [ getOnePost ] = fetchOnePost({}, { skipInitialRequest: true });
+
+    const [ fetchAll ] = RequestsGroup({
+        required: [getTodos],
+        optional: [getUsers]
+    }, {
+        skipInitialRequest: true
+    });
 
     const [items, setItems] = useState<undefined|Todo[]>();
 
-
-    useEffect(() => {
-        const rh = new RequestsHandler();
-        rh.parallel({
-            required: [getTodos],
-            optional: [getUsers, getPosts]
-        })
-            .then(response => {
-                // handleFulfilledResponses(response);
-                console.log('Got all: ', response);
-            }).catch(error => {
-                console.log('A promise failed: ', error)
-            })
+    useEffect(()=>{
+        // const hr = new RequestsHandler();
+        // hr.parallel()
+        getItems();
     }, []);
 
+    function getItems() {
+        fetchAll({
+            asynchronous: false
+        }).then(responses => {
+            console.log('Responses: ', responses);
+            handleFulfilledResponses(responses);
+        });
+    }
 
-    // if(isInitialLoad) {
-    //     if(response) {
-    //         console.log('Response: ', response);
-    //         setTodos(response[1]);
-    //         handleFulfilledResponses(response);
-
-    //         // Will get ONE post with id 1
-    //         getOnePost({
-    //             params: { id: 1 }
-    //         }).then(response => {
-    //             console.log('Got one Post', response);
-    //         })
-    //     }
-    
-    //     if(error) {
-    //         handleFetchErrors(error);
-    //     }
-    // }
-
-    function handleFulfilledResponses(data: [User[], Todo[], Post[]]) {
-        const [users, todos, posts] = data;
+    function handleFulfilledResponses(data: [Todo[], User[]]) {
+        const [todos, users] = data;
         const usersMap: UsersMap = {};
         
         users.map(user => {
@@ -81,12 +66,11 @@ export default function Test() {
             console.log('Ok, we at least got users', error);
         }
     }
-    
+
     return (
         <>
-            <h2>Test Page</h2>
-            <p>Lorem ipsum dolor, sit amet consectetur adipisicing elit. Ad, eaque.</p>
             <h2>Todos</h2>
+            <button onClick={getItems}>Reload</button>
             {items && (
                 <>
                     <ul>

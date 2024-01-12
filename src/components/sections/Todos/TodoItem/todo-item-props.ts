@@ -4,5 +4,6 @@ type OnSelectFunction = (item: Todo) => void;
 
 export interface TodoItemProps {
     todo: Todo;
+    isOdd: boolean;
     onSelect?: OnSelectFunction;
 }

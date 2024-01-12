@@ -1,4 +1,3 @@
-import { AxiosError } from "axios";
 import { useState } from "react"; 
 
 const environment = {
@@ -59,7 +58,7 @@ type RequestsGroupConfig = {
 }
 
 type RequestsGroupResponse = [
-    (config?: RequestsGroupConfig) => void,
+    (config?: RequestsGroupConfig) => Promise<any>,
     {
         response: any,
         isLoading: boolean,
@@ -143,9 +142,8 @@ export class RequestsHandler {
     private groups: HandlerGroups = {};
     private settings: HandlerConfig = {};
     private queue: RequestQueue;
-    private isStarted: boolean = false;
-    private hasWarnings: boolean = false;
-    public isSettled: boolean = false;
+    private isStarted = false;
+    public isSettled = false;
     private doOnSuccess: HandlerCallbackFn = () => {};
     private doOnFailure: HandlerCallbackFn = () => {};
     responses: any[] = [];
@@ -349,42 +347,47 @@ export function RequestsGroup(requests: HandlerRequests | HandlerRequestTypes, c
 
     const requestHandler = new RequestsHandler();
 
-    const reload = (config?: RequestsGroupConfig) => {
-        if(!isLoading && !isSettled && !requestHandler.isSettled) {
-            setIsLoading(true);
-            const rhConfig: HandlerRequestsConfig = {
-                asynchronous: config?.asynchronous || false
+    const reload = (config?: RequestsGroupConfig, forceReload?: boolean) => {
+        return new Promise((resolve, reject) => {
+            if((!isLoading && !isSettled && !requestHandler.isSettled) || forceReload) {
+                setIsLoading(true);
+                const rhConfig: HandlerRequestsConfig = {
+                    asynchronous: config?.asynchronous || false
+                }
+                requestHandler.requests(null, requests, rhConfig).then(responses => {
+                    setHandlerResponses(responses);
+                    setIsLoading(false);
+                    setIsSettled(true);
+                    if(typeof config?.onSuccess === 'function') {
+                        config.onSuccess(responses);
+                    }
+                    resolve(responses);
+                }).catch(error => {
+                    if(error.error instanceof RequiredRequestFailure) {
+                        setError(error);
+                        if(typeof config?.onError === 'function') {
+                            config.onError(error);
+                        }
+                    } else {
+                        setWarning(error);
+                        if(typeof config?.onWarning === 'function') {
+                            config.onWarning(error);
+                        }
+                    }
+                    setIsLoading(false);
+                    setIsSettled(true);
+                    reject(error);
+                });
+            } else if(isSettled && isInitialLoad) {
+                setIsInitialLoad(false);
+                resolve(handlerResponses);
             }
-            requestHandler.requests(null, requests, rhConfig).then(responses => {
-                setHandlerResponses(responses);
-                setIsLoading(false);
-                setIsSettled(true);
-                if(typeof config?.onSuccess === 'function') {
-                    config.onSuccess(responses);
-                }
-            }).catch(error => {
-                if(error.error instanceof RequiredRequestFailure) {
-                    setError(error);
-                    if(typeof config?.onError === 'function') {
-                        config.onError(error);
-                    }
-                } else {
-                    setWarning(error);
-                    if(typeof config?.onWarning === 'function') {
-                        config.onWarning(error);
-                    }
-                }
-                setIsLoading(false);
-                setIsSettled(true);
-            });
-        } else if(isSettled && isInitialLoad) {
-            setIsInitialLoad(false);
-        }
+        });
     }
 
     if(!config?.skipInitialRequest) {
         reload(config);
     }
 
-    return [ reload, { response: handlerResponses, isLoading, isInitialLoad, isSettled, error, warning }];
+    return [ (config?: RequestsGroupConfig) => reload(config, true), { response: handlerResponses, isLoading, isInitialLoad, isSettled, error, warning }];
 }
