@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 
-import './header.css';
+import styles from './header.module.css';
 
 export default function Header() {
 
@@ -23,12 +23,13 @@ export default function Header() {
         // }
     ]
 
+    console.log('Styles: ', styles);
     
 
     return (
         <header>
-            <NavLink to="/" className="app-name">My App</NavLink>
-            <ul className="menu">
+            <NavLink to="/" className={styles['app-name']}>My App</NavLink>
+            <ul className={styles.menu}>
                 {
                     menuItems.map((item: MenuItem) => {
                         return (
