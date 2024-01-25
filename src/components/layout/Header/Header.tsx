@@ -37,6 +37,7 @@ export default function Header() {
                     })
                 }
             </ul>
+            <button className={`${styles['notifications-icon']} ${styles['has-notifications']}`}>Notifications</button>
         </header>
     )
 }

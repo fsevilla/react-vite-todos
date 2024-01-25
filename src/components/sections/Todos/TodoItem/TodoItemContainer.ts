@@ -7,8 +7,10 @@ export const TodoItemContainer = styled.div`
     width: 300px;
     box-sizing: border-box;
     padding: 10px;
+    cursor: pointer;
 `;
 
 export const NarrowTodoItemContainer = styled(TodoItemContainer)`
     width: 200px;
+    background-color: #d6fcf3;
 `;

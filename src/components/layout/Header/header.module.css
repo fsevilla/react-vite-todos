@@ -30,3 +30,21 @@ header .menu > li > a {
     text-decoration: none;
     font-size: 18px;
 }
+
+header .notifications-icon {
+    float: right;
+    position: relative;
+    top: 30px;
+}
+
+header .notifications-icon.has-notifications::after {
+    content: "";
+    display: block;
+    width: 8px;
+    height: 8px;
+    background-color: rgb(214, 252, 243);
+    border-radius: 50%;
+    position: absolute;
+    top: -3px;
+    right: -3px;
+}
