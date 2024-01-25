@@ -2,6 +2,8 @@ import { useContext } from "react";
 
 import { TodosContext } from "../../../../store/todos-context";
 import { TodoItemProps } from "./todo-item-props"
+import { TodoItemContainer, NarrowTodoItemContainer } from './TodoItemContainer';
+
 
 export default function TodoItem (props: TodoItemProps) {
 
@@ -9,11 +11,16 @@ export default function TodoItem (props: TodoItemProps) {
     const { selectTodo } = useContext(TodosContext);
 
     return (
-        <div
-            className="heading"
-            style={{
-                'backgroundColor': props.isOdd ? 'lightgray' : undefined
-            }}
-            onClick={() => {selectTodo(todo)}}>{todo.title} (assigned to: {todo.user?.name})</div>
+        <>
+            {props.isOdd && 
+                <TodoItemContainer onClick={() => {selectTodo(todo)}}>
+                    {todo.title} (assigned to: {todo.user?.name})
+                </TodoItemContainer>}
+
+            {!props.isOdd && 
+                <NarrowTodoItemContainer onClick={() => {selectTodo(todo)}}>
+                    {todo.title} (assigned to: {todo.user?.name})
+                </NarrowTodoItemContainer>}
+        </>
     )
 }

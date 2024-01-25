@@ -11,6 +11,12 @@ const options: CreateApiOptions = {
       method: 'POST',
       prepareData: (data: any) => {
         return { ...data, newData: true };
+      },
+      transformResponse: (response) => {
+        return response.map((item: any) => {
+          item.modified = true;
+          return item;
+        })
       }
     },
     {
@@ -30,5 +36,4 @@ const options: CreateApiOptions = {
 }
 
 export const TodoApi = createApiService(options);
-
 export const { fetchTodos, createTodo, updateTodo, deleteTodo } = TodoApi;

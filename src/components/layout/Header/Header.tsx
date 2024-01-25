@@ -23,9 +23,6 @@ export default function Header() {
         // }
     ]
 
-    console.log('Styles: ', styles);
-    
-
     return (
         <header>
             <NavLink to="/" className={styles['app-name']}>My App</NavLink>
