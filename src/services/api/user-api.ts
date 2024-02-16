@@ -7,6 +7,8 @@ const options: CreateApiOptions = {
     {
       name: 'fetchUsers',
       method: 'GET',
+      cache: true,
+      cacheExpiration: 10,
       transformResponse: (data) => {
         return data;
       },

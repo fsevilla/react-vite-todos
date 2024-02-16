@@ -2,10 +2,8 @@ import { useEffect, useState } from "react";
 
 import { fetchTodos } from "../../../services/api/new-todo-api";
 import { fetchUsers } from "../../../services/api/user-api";
-import { fetchPosts, fetchOnePost } from "../../../services/api/post-api";
 
 import { Todo } from "../../../types/todo-type";
-import { Post } from "../../../types/post-type";
 import { User } from "../../../types/user-type";
 
 import { HandlerRequestsResponse, RequestsHandler, RequestsHandlerError, RequiredRequestFailure, RequestsGroup } from "../../../utils/requests-handler";
@@ -19,19 +17,16 @@ export default function Test() {
     const [ getTodos ] = fetchTodos({}, { skipInitialRequest: true });
     const [ getUsers ] = fetchUsers({}, { skipInitialRequest: true });
 
-    const [ fetchAll ] = RequestsGroup({
-        required: [getTodos],
-        optional: [getUsers]
-    }, {
+    const [ fetchAll ] = RequestsGroup([getTodos, getUsers], {
         skipInitialRequest: true
     });
 
     const [items, setItems] = useState<undefined|Todo[]>();
 
     useEffect(()=>{
-        // const hr = new RequestsHandler();
-        // hr.parallel()
         getItems();
+        const rh = new RequestsHandler();
+        
     }, []);
 
     function getItems() {

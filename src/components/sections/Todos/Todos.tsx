@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
 
 import TodoDetails from "./TodoDetails/TodoDetails";
-// import TodoInputs from "./TodoInputs/TodoInputs";
 import TodosList from "./TodosList/TodosList";
 
 import { fetchTodos } from "../../../services/api/new-todo-api";
 
-
 import { TodosContext } from "../../../store/todos-context";
 import { Todo } from "../../../types/todo-type";
-import { User } from "../../../types/user-type";
 
-type TodoUserResponse = [Todo[], User[]];
 
 export default function Todos() {
 

@@ -4,8 +4,8 @@ const options: CreateApiOptions = {
   requiresAuth: false,
   baseApiPath: 'todos',
   endpoints: [
-    { name: 'fetchTodos', method: 'GET' },
-    { name: 'fetchOneTodo', method: 'GET', path: 'todos/{id}' },
+    { name: 'fetchTodos', method: 'GET', cache: true, cacheExpiration: 10 },
+    { name: 'fetchOneTodo', method: 'GET', cache: true, path: 'todos/{id}' },
     {
       name: 'createTodo',
       method: 'POST',

@@ -82,7 +82,7 @@ const defaultHandlerRequestsConfig: HandlerRequestsConfig =  {
 export class RequestsHandlerError extends Error {
     constructor(message: string) {
       super(message);
-      this.name = "RequestsHandlerError";
+      this.name = 'RequestsHandlerError';
       Object.setPrototypeOf(this, RequestsHandlerError.prototype);
     }
 }
@@ -90,7 +90,7 @@ export class RequestsHandlerError extends Error {
 export class RequestsHandlerDuplicateGroupError extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
-      this.name = "RequestsHandlerDuplicateGroupError";
+      this.name = 'RequestsHandlerDuplicateGroupError';
       Object.setPrototypeOf(this, RequestsHandlerDuplicateGroupError.prototype);
     }
 }
@@ -98,7 +98,7 @@ export class RequestsHandlerDuplicateGroupError extends RequestsHandlerError {
 export class OptionalRequestFailure extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
-      this.name = "OptionalRequestFailure";
+      this.name = 'OptionalRequestFailure';
       Object.setPrototypeOf(this, OptionalRequestFailure.prototype);
     }
 }
@@ -106,7 +106,7 @@ export class OptionalRequestFailure extends RequestsHandlerError {
 export class RequiredRequestFailure extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
-      this.name = "RequiredRequestFailure";
+      this.name = 'RequiredRequestFailure';
       Object.setPrototypeOf(this, RequiredRequestFailure.prototype);
     }
 }
@@ -114,7 +114,7 @@ export class RequiredRequestFailure extends RequestsHandlerError {
 export class UnknownRequestsHandlerError extends RequestsHandlerError {
     constructor(message: string) {
       super(message);
-      this.name = "UnknownRequestsHandlerError";
+      this.name = 'UnknownRequestsHandlerError';
       Object.setPrototypeOf(this, UnknownRequestsHandlerError.prototype);
     }
 }
@@ -223,29 +223,26 @@ export class RequestsHandler {
                 const isQueue = promises[0] instanceof RequestQueue;
                 if(isQueue) {
                     const queuePromises = promises[0].list().map((item: LabeledPromise[])  => item[0]);
-                    this.log('Will handle serial promises: ', queuePromises);
                     let responses = await this.handleLabeledPromises(queuePromises, false);
                     responses = results.length === 1 ? responses[0] : responses;
                     results.push(responses);
                 } else {
-                    this.log('Will handle promises in parallel: ', promises);
                     let responses = await this.handleLabeledPromises(promises, true);
                     responses = results.length === 1 ? responses[0] : responses;
                     results.push(responses);
                 }
-                this.log('Settled all grouped promises: ', results);
                 promises = this.queue.next();
 
             } catch(e) {
                 if((e as {error: RequestsHandlerError}).error instanceof RequiredRequestFailure) {
                     this.doOnFailure(e);
                     return e;
-                } else {
+                } 
                     optionalError = (e as {error: OptionalRequestFailure}).error;
                     const responses = (e as {results: any[]}).results;
                     results.push(responses);
                     promises = this.queue.next();
-                }
+                
             }
         }
 

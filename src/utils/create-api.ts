@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { HttpService, HttpRequestOptions, RequestData, RequestParams } from "./http-service";
+import { ClassConstructor } from 'class-transformer';
 
 const apiUrl: string = 'https://jsonplaceholder.typicode.com/';
 
@@ -8,10 +9,8 @@ export interface CreateApiOptions {
     baseUrl?: string;
     baseApiPath?: string;
     endpoints?: HttpRequestOptions[];
-    prepareData?: (requestBody: any) => {};
+    prepareData?: (requestBody: unknown) => unknown;
     skipDefaultEndpoints?: boolean;
-    transformResponse?: (response: any) => void | {};
-    transformErrorResponse?: (response: any) => void | {};
 }
 
 export type ApiServiceEndpointResponse = [(data?: RequestData|RequestArguments, args?: RequestArguments) => Promise<unknown>, ApiServiceResults];
@@ -32,6 +31,7 @@ export type ApiServiceEndpoints = {
 
 export type UseApiConfig = {
     skipInitialRequest?: boolean;
+    invalidateCache?: boolean;
 }
 
 interface RequestArguments {
@@ -84,6 +84,8 @@ function createApiFetchEndpoint(http: HttpService, endpointConfig: HttpRequestOp
                     ...initOptions,
                     ...args
                 }
+
+                options.invalidateCache = config?.invalidateCache;
 
                 if((!isFetching && !isReady) || !!force) {
                     setIsLoading(true);
@@ -142,15 +144,16 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
             options.body = requestBody;
             options.params = args?.params;
             options.queryParams = args?.queryParams;
+            options.invalidateCache = config?.invalidateCache;
             return new Promise((resolve, reject) => {
                 if((!isFetching && !isReady) || !!force) {
                     setIsLoading(true);
                     setIsFetching(true);
                     http.request(options).then(response => {
+                        setData(response);
                         setIsLoading(false);
                         setIsFetching(false);
                         setIsReady(true);
-                        setData(response);
                         resolve(response);
                     }).catch(err => {
                         setIsLoading(false);
@@ -179,9 +182,9 @@ function createApiPostEndpoint(http: HttpService, endpointConfig: HttpRequestOpt
 function createApiServiceEndpoint (http: HttpService, endpointConfig: HttpRequestOptions, baseApiPath: string) {
     if(endpointConfig.method === 'GET' || endpointConfig.method === 'DELETE') {
         return createApiFetchEndpoint(http, endpointConfig, baseApiPath);
-    } else {
+    } 
         return createApiPostEndpoint(http, endpointConfig, baseApiPath);
-    }
+    
 }
 
 function createApiServiceEndpointsMap (http: HttpService, endpoints: HttpRequestOptions[], baseApiPath: string) {
@@ -231,7 +234,7 @@ function useFetchData() {
     };
 }
 
-export function isErrorOfType(err: any, instanceClass: any) {
+export function isErrorOfType(err: Error, instanceClass: ClassConstructor<Error>) {
     try {
         const testInstance = new instanceClass();
         return err.name === testInstance.name;
